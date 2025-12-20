@@ -20,10 +20,38 @@ import json
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
+if TYPE_CHECKING:
+    from _pytest.config import Config
+    from _pytest.python import Function
+
+
+# =============================================================================
+# Test Collection Hook
+# =============================================================================
+
+
+def pytest_collection_modifyitems(config: Config, items: list[Function]) -> None:
+    """Ensure unit tests run before integration tests.
+
+    Integration tests in tests/integration/viewer/ use _clear_module_cache()
+    which can affect patching in subsequent unit tests. Running unit tests
+    first prevents this test pollution issue.
+    """
+
+    def sort_key(item: Function) -> tuple[int, str]:
+        # Unit tests (tests/unit/) get priority 0, integration tests get 1
+        path_str = str(item.fspath)
+        if "/integration/" in path_str:
+            return (1, path_str)
+        return (0, path_str)
+
+    items.sort(key=sort_key)
+
 
 # =============================================================================
 # Path Fixtures
