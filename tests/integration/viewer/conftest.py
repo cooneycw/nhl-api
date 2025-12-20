@@ -120,9 +120,9 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest.fixture
-async def async_client_with_tracking() -> (
-    AsyncGenerator[tuple[AsyncClient, MockDatabaseService], None]
-):
+async def async_client_with_tracking() -> AsyncGenerator[
+    tuple[AsyncClient, MockDatabaseService], None
+]:
     """Create an async client that tracks database service calls.
 
     Returns tuple of (client, db_service) for assertions on lifecycle.
