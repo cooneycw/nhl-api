@@ -46,7 +46,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -e .[lint]
+        run: pip install -e .[lint,test]
 
       - name: Run mypy
         run: mypy .
