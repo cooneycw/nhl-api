@@ -1,5 +1,14 @@
 # NHL API Project
 
+## Before You Start - Session Checklist
+
+- [ ] **Working directory is main repo** (`/home/cooneycw/Projects/nhl-api`)
+- [ ] **NOT in a worktree directory** (e.g., `nhl-api-issue-5`)
+
+> **Why?** Starting Claude Code from a worktree that later gets removed breaks the entire shell session. Always launch from the main repo.
+
+---
+
 ## Claude Power Pack Integration
 
 This project uses Claude Power Pack. Available commands:
@@ -39,6 +48,22 @@ Use second-opinion MCP for code review when needed.
 ## Git Worktree Workflow
 
 Worktrees allow parallel development on multiple issues without branch switching.
+
+### ⚠️ Claude Code Session Warning
+
+**ALWAYS start Claude Code sessions from the main repo directory**, not from worktree directories:
+
+```bash
+# CORRECT - start from main repo
+cd /home/cooneycw/Projects/nhl-api
+claude
+
+# WRONG - starting from worktree breaks shell when worktree is removed
+cd /home/cooneycw/Projects/nhl-api-issue-5
+claude
+```
+
+**Why:** If Claude Code's working directory is a worktree that gets removed during cleanup, the shell session breaks completely and no bash commands can run.
 
 ### Naming Conventions
 
