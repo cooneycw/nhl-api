@@ -59,7 +59,7 @@ include = [
     "/tests",
 ]
 
-# Pytest configuration (see issue #5 for full setup)
+# Pytest configuration
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
@@ -70,6 +70,11 @@ addopts = [
     "--cov-fail-under=80",
 ]
 asyncio_mode = "auto"
+markers = [
+    "unit: Unit tests (fast, no external dependencies)",
+    "integration: Integration tests (may require external services)",
+    "data_validation: Data validation tests (verify data integrity)",
+]
 
 # Ruff configuration (see issue #7 for full setup)
 [tool.ruff]
