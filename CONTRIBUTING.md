@@ -33,7 +33,7 @@ Thank you for your interest in contributing to the NHL API project. This guide c
    ```bash
    pre-commit install
    ```
-   > **Note:** Pre-commit configuration is coming soon (see [Issue #7](https://github.com/cooneycw/nhl-api/issues/7)).
+   This installs hooks for ruff (linting/formatting), mypy (type checking), and pytest (unit tests).
 
 ## Git Worktree Workflow
 
@@ -84,7 +84,12 @@ Examples:
 
 ### Pre-Commit Requirements
 
-All unit tests must pass before committing. This is enforced by pre-commit hooks (coming soon in [Issue #7](https://github.com/cooneycw/nhl-api/issues/7)).
+All unit tests must pass before committing. This is enforced by pre-commit hooks that run automatically on each commit:
+
+- **ruff**: Linting and auto-fixing
+- **ruff-format**: Code formatting
+- **mypy**: Type checking
+- **pytest**: Unit tests (commit blocked if tests fail)
 
 ## Code Quality Requirements
 

@@ -1,0 +1,31 @@
+# Pre-commit hooks for NHL API
+# See https://pre-commit.com for more information
+
+repos:
+  # Ruff - linting and formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Local hooks
+  - repo: local
+    hooks:
+      # mypy type checking
+      - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+        args: ["."]
+
+      # pytest unit tests (blocks commit if tests fail)
+      - id: pytest-unit
+        name: pytest unit tests
+        entry: pytest -m unit --no-cov
+        language: system
+        pass_filenames: false
+        always_run: true
