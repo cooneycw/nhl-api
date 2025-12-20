@@ -1,0 +1,108 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nhl-api"
+version = "0.1.0"
+description = "Consolidated NHL data pulling library"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "cooneycw" },
+]
+keywords = ["nhl", "hockey", "api", "sports", "data"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    # Core dependencies will be added as needed
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit>=3.0.0",
+]
+test = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+lint = [
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+]
+all = [
+    "nhl-api[dev,test,lint]",
+]
+
+[project.urls]
+Homepage = "https://github.com/cooneycw/nhl-api"
+Repository = "https://github.com/cooneycw/nhl-api"
+Issues = "https://github.com/cooneycw/nhl-api/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nhl_api"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+]
+
+# Pytest configuration (see issue #5 for full setup)
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = [
+    "-v",
+    "--cov=nhl_api",
+    "--cov-report=term-missing",
+    "--cov-fail-under=80",
+]
+asyncio_mode = "auto"
+
+# Ruff configuration (see issue #7 for full setup)
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["nhl_api"]
+
+# Mypy configuration (see issue #8 for full setup)
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+mypy_path = "src"
+packages = ["nhl_api"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
