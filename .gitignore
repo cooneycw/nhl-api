@@ -76,3 +76,6 @@ logs/
 # Local development
 .local/
 *.local
+
+# Claude Code local settings
+.claude/

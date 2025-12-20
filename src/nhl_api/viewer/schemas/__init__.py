@@ -1,5 +1,17 @@
 """Pydantic schemas for viewer API responses."""
 
+from nhl_api.viewer.schemas.downloads import (
+    ActiveDownload,
+    ActiveDownloadsResponse,
+    BatchCreated,
+    CancelDownloadResponse,
+    DownloadOptionsResponse,
+    DownloadStartRequest,
+    DownloadStartResponse,
+    SeasonOption,
+    SourceGroup,
+    SourceOption,
+)
 from nhl_api.viewer.schemas.entities import (
     DivisionTeams,
     GameDetail,
@@ -16,6 +28,18 @@ from nhl_api.viewer.schemas.entities import (
 )
 
 __all__ = [
+    # Downloads
+    "ActiveDownload",
+    "ActiveDownloadsResponse",
+    "BatchCreated",
+    "CancelDownloadResponse",
+    "DownloadOptionsResponse",
+    "DownloadStartRequest",
+    "DownloadStartResponse",
+    "SeasonOption",
+    "SourceGroup",
+    "SourceOption",
+    # Entities
     "DivisionTeams",
     "GameDetail",
     "GameListResponse",

@@ -1,9 +1,10 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { Activity, Users, Calendar, CheckCircle } from 'lucide-react'
+import { Activity, Download, Users, Calendar, CheckCircle } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Activity },
+  { name: 'Downloads', href: '/downloads', icon: Download },
   { name: 'Players', href: '/players', icon: Users },
   { name: 'Games', href: '/games', icon: Calendar },
   { name: 'Validation', href: '/validation', icon: CheckCircle },

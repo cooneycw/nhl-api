@@ -19,6 +19,83 @@ This project uses Claude Power Pack. Available commands:
 
 Use second-opinion MCP for code review when needed.
 
+## Project-Specific Commands
+
+- `/nhl-next` - Scan GitHub issues and worktree state, recommend prioritized next steps (uses Plan Mode)
+- `/viewer` - Start the NHL Data Viewer backend (add `--full` for frontend, `--stop` to stop)
+
+---
+
+## Data Viewer
+
+The project includes a FastAPI backend + React frontend for exploring downloaded NHL data.
+
+### Quick Start
+
+```bash
+# Start backend only (recommended for API exploration)
+./scripts/start-viewer.sh
+
+# Start backend + frontend
+./scripts/start-viewer.sh --full
+
+# Stop all viewer processes
+./scripts/start-viewer.sh --stop
+
+# Check status
+./scripts/start-viewer.sh --status
+```
+
+### URLs
+
+| URL | Description |
+|-----|-------------|
+| http://localhost:8000/docs | **Swagger UI** - Interactive API explorer |
+| http://localhost:8000/redoc | ReDoc API documentation |
+| http://localhost:8000/health | Health check endpoint |
+| http://localhost:8000/api/v1/players | Player data |
+| http://localhost:8000/api/v1/teams | Team data |
+| http://localhost:8000/api/v1/games | Game data |
+| http://localhost:8000/api/v1/monitoring/dashboard | Download progress dashboard |
+| http://localhost:5173 | Frontend UI (with `--full` flag) |
+
+### Logs
+
+```bash
+# Backend logs
+tail -f /tmp/nhl-viewer-backend.log
+
+# Frontend logs
+tail -f /tmp/nhl-viewer-frontend.log
+```
+
+### Requirements
+
+- Database credentials configured in `.env` (see `.env.example`):
+  - **Option 1 (local dev):** Set `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
+  - **Option 2 (AWS):** Set `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `NHL_DB_SECRET_ID`
+- Data in the database (run downloaders first to populate)
+
+### Claude Session Usage
+
+Use the `/viewer` command:
+```
+/viewer          # Start backend
+/viewer --full   # Start backend + frontend
+/viewer --stop   # Stop viewer
+```
+
+Then browse to http://localhost:8000/docs to explore the API interactively.
+
+### Troubleshooting
+
+**"Unable to locate credentials":**
+- Ensure `.env` file exists with either `DB_*` or `AWS_*` credentials
+- Copy from `.env.example` if needed
+
+**Empty data:**
+- Run downloaders first (Schedule, Boxscore, etc.) to populate the database
+
 ## Project Goals
 
 - Consolidate NHL data pulling from existing cooneycw repos

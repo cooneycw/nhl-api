@@ -27,7 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from nhl_api.services.db import DatabaseService
 from nhl_api.viewer.config import get_settings
 from nhl_api.viewer.dependencies import set_db_service
-from nhl_api.viewer.routers import entities, health, monitoring, validation
+from nhl_api.viewer.routers import downloads, entities, health, monitoring, validation
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -110,6 +110,7 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(health.router)
+    app.include_router(downloads.router, prefix=f"/api/{settings.api_version}")
     app.include_router(monitoring.router, prefix=f"/api/{settings.api_version}")
     app.include_router(entities.router, prefix=f"/api/{settings.api_version}")
     app.include_router(validation.router, prefix=f"/api/{settings.api_version}")

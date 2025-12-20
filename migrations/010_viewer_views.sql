@@ -15,7 +15,7 @@ SELECT
     ds.name AS source_name,
     ds.source_type,
     ib.season_id,
-    s.season_name,
+    CAST(s.start_year AS TEXT) || CAST(s.end_year AS TEXT) AS season_name,
     ib.status,
     ib.started_at,
     ib.completed_at,
@@ -201,7 +201,7 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS mv_game_summary AS
 SELECT
     g.game_id,
     g.season_id,
-    s.season_name,
+    CAST(s.start_year AS TEXT) || CAST(s.end_year AS TEXT) AS season_name,
     g.game_type,
     CASE g.game_type
         WHEN 'PR' THEN 'Preseason'

@@ -29,6 +29,7 @@ dependencies = [
     "asyncpg>=0.29.0",      # PostgreSQL async driver
     "boto3>=1.34.0",        # AWS SDK for Secrets Manager
     "pydantic>=2.5.0",      # Data validation
+    "python-dotenv>=1.0.0", # .env file support
 ]
 
 [project.optional-dependencies]
