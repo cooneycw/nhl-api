@@ -1,0 +1,80 @@
+name: Bug Report
+description: Report a bug in the NHL API project
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Found a bug? Please provide as much detail as possible.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of the project is affected?
+      options:
+        - API endpoint
+        - Data parsing
+        - Authentication
+        - Data storage
+        - Configuration
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: endpoint
+    attributes:
+      label: Affected endpoint/module
+      description: Which specific endpoint or module?
+      placeholder: "e.g., /api/players, data_fetcher.py"
+    validations:
+      required: false
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug description
+      description: What happened? What did you expect to happen?
+      placeholder: |
+        **What happened:**
+        [describe the bug]
+
+        **Expected behavior:**
+        [what should have happened]
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce this bug?
+      placeholder: |
+        1. Call endpoint '...'
+        2. With parameters '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error message
+      description: If there's an error message, paste it here
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Your setup details
+      value: |
+        - OS:
+        - Python version:
+        - Conda environment:
+    validations:
+      required: false

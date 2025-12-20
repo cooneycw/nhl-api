@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: NHL API Reference
+    url: https://github.com/Zmalski/NHL-API-Reference
+    about: Comprehensive NHL API documentation
+  - name: Claude Power Pack
+    url: https://github.com/cooneycw/claude-power-pack
+    about: Best practices and MCP tools

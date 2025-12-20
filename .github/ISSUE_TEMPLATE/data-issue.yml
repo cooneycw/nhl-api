@@ -1,0 +1,76 @@
+name: Data Issue
+description: Report incorrect, missing, or stale data
+labels: ["data", "investigation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report issues with the data returned by the API.
+
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: Issue type
+      description: What kind of data issue is this?
+      options:
+        - Incorrect data
+        - Missing data
+        - Stale/outdated data
+        - Data format issue
+        - Data inconsistency
+        - Missing field
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: entity
+    attributes:
+      label: Affected entity
+      description: Which player, team, game, or season is affected?
+      placeholder: "e.g., Connor McDavid, Edmonton Oilers, Game ID 2024020001"
+    validations:
+      required: true
+
+  - type: input
+    id: field
+    attributes:
+      label: Affected field
+      description: Which specific data field has the issue?
+      placeholder: "e.g., goals, assists, timeOnIce, shootingPctg"
+    validations:
+      required: false
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Issue description
+      description: Describe the data problem
+      placeholder: |
+        **Current value:**
+        [what the API returns]
+
+        **Expected value:**
+        [what it should be]
+
+        **Source of truth:**
+        [where you verified the correct value - NHL.com, ESPN, etc.]
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Data source verification
+      description: Where did you verify the correct data?
+      placeholder: "e.g., NHL.com, ESPN, official game sheet"
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Any other information that might help
+    validations:
+      required: false
