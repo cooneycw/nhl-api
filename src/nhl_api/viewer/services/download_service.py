@@ -321,17 +321,21 @@ class DownloadService:
             batch_id,
         )
 
-        # Schedule is already fetched, just count as complete
+        # Persist games to database
+        persisted = await downloader.persist(db, games)
+
         if active_download:
-            active_download.items_completed = len(games)
+            active_download.items_completed = persisted
 
         await db.execute(
             "UPDATE import_batches SET items_success = $1 WHERE batch_id = $2",
-            len(games),
+            persisted,
             batch_id,
         )
 
-        logger.info("Downloaded %d games for season %d", len(games), season_id)
+        logger.info(
+            "Downloaded and persisted %d games for season %d", persisted, season_id
+        )
 
     async def _download_game_based(
         self,

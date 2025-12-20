@@ -673,3 +673,265 @@ class TestScheduleDownloaderAdvanced:
             game_ids.append(game_id)
 
         assert len(game_ids) >= 1
+
+
+@pytest.mark.unit
+class TestScheduleDownloaderPersist:
+    """Tests for ScheduleDownloader.persist() method."""
+
+    @pytest.fixture
+    def mock_db(self) -> MagicMock:
+        """Create a mock database service."""
+        db = MagicMock()
+        db.execute = AsyncMock()
+        return db
+
+    @pytest.fixture
+    def downloader(self) -> ScheduleDownloader:
+        """Create a ScheduleDownloader for testing."""
+        config = DownloaderConfig(
+            base_url="https://api-web.nhle.com/v1",
+            requests_per_second=10.0,
+        )
+        return ScheduleDownloader(config)
+
+    @pytest.fixture
+    def sample_games(self) -> list[GameInfo]:
+        """Create sample games for testing."""
+        return [
+            GameInfo(
+                game_id=2024020001,
+                season_id=20242025,
+                game_type=2,
+                game_date=date(2024, 10, 8),
+                start_time_utc=datetime(2024, 10, 8, 23, 0, tzinfo=UTC),
+                venue_name="TD Garden",
+                home_team_id=6,
+                home_team_abbrev="BOS",
+                home_score=3,
+                away_team_id=10,
+                away_team_abbrev="TOR",
+                away_score=2,
+                game_state="FINAL",
+                period=3,
+                is_overtime=False,
+                is_shootout=False,
+            ),
+            GameInfo(
+                game_id=2024020002,
+                season_id=20242025,
+                game_type=2,
+                game_date=date(2024, 10, 8),
+                start_time_utc=datetime(2024, 10, 9, 0, 0, tzinfo=UTC),
+                venue_name="Madison Square Garden",
+                home_team_id=3,
+                home_team_abbrev="NYR",
+                home_score=4,
+                away_team_id=1,
+                away_team_abbrev="NJD",
+                away_score=5,
+                game_state="FINAL",
+                period=4,
+                is_overtime=True,
+                is_shootout=False,
+            ),
+        ]
+
+    async def test_persist_empty_list(
+        self,
+        downloader: ScheduleDownloader,
+        mock_db: MagicMock,
+    ) -> None:
+        """Test persisting an empty list returns 0."""
+        result = await downloader.persist(mock_db, [])
+
+        assert result == 0
+        mock_db.execute.assert_not_called()
+
+    async def test_persist_single_game(
+        self,
+        downloader: ScheduleDownloader,
+        mock_db: MagicMock,
+        sample_games: list[GameInfo],
+    ) -> None:
+        """Test persisting a single game."""
+        result = await downloader.persist(mock_db, [sample_games[0]])
+
+        assert result == 1
+        mock_db.execute.assert_called_once()
+
+        # Verify the SQL was called with correct parameters
+        call_args = mock_db.execute.call_args
+        assert call_args[0][1] == 2024020001  # game_id
+        assert call_args[0][2] == 20242025  # season_id
+        assert call_args[0][3] == "R"  # game_type (2 -> "R")
+        assert call_args[0][4] == date(2024, 10, 8)  # game_date
+
+    async def test_persist_multiple_games(
+        self,
+        downloader: ScheduleDownloader,
+        mock_db: MagicMock,
+        sample_games: list[GameInfo],
+    ) -> None:
+        """Test persisting multiple games."""
+        result = await downloader.persist(mock_db, sample_games)
+
+        assert result == 2
+        assert mock_db.execute.call_count == 2
+
+    async def test_persist_game_type_mapping(
+        self,
+        downloader: ScheduleDownloader,
+        mock_db: MagicMock,
+    ) -> None:
+        """Test that game types are correctly mapped to string codes."""
+        test_cases = [
+            (1, "PR"),  # Preseason
+            (2, "R"),  # Regular
+            (3, "P"),  # Playoffs
+            (4, "A"),  # All-Star
+        ]
+
+        for game_type_int, expected_code in test_cases:
+            mock_db.execute.reset_mock()
+
+            game = GameInfo(
+                game_id=2024020001,
+                season_id=20242025,
+                game_type=game_type_int,
+                game_date=date(2024, 10, 8),
+                start_time_utc=None,
+                venue_name=None,
+                home_team_id=1,
+                home_team_abbrev="BOS",
+                home_score=None,
+                away_team_id=2,
+                away_team_abbrev="NYR",
+                away_score=None,
+                game_state="FUT",
+            )
+
+            await downloader.persist(mock_db, [game])
+
+            call_args = mock_db.execute.call_args
+            assert call_args[0][3] == expected_code, (
+                f"Expected {expected_code} for game_type {game_type_int}"
+            )
+
+    async def test_persist_game_outcome_regular(
+        self,
+        downloader: ScheduleDownloader,
+        mock_db: MagicMock,
+    ) -> None:
+        """Test game outcome is REG for regulation win."""
+        game = GameInfo(
+            game_id=2024020001,
+            season_id=20242025,
+            game_type=2,
+            game_date=date(2024, 10, 8),
+            start_time_utc=None,
+            venue_name=None,
+            home_team_id=1,
+            home_team_abbrev="BOS",
+            home_score=3,
+            away_team_id=2,
+            away_team_abbrev="NYR",
+            away_score=2,
+            game_state="FINAL",
+            period=3,
+            is_overtime=False,
+            is_shootout=False,
+        )
+
+        await downloader.persist(mock_db, [game])
+
+        call_args = mock_db.execute.call_args
+        # game_outcome is the 14th parameter (index 13 in 0-indexed after SQL)
+        assert call_args[0][14] == "REG"
+
+    async def test_persist_game_outcome_overtime(
+        self,
+        downloader: ScheduleDownloader,
+        mock_db: MagicMock,
+    ) -> None:
+        """Test game outcome is OT for overtime win."""
+        game = GameInfo(
+            game_id=2024020001,
+            season_id=20242025,
+            game_type=2,
+            game_date=date(2024, 10, 8),
+            start_time_utc=None,
+            venue_name=None,
+            home_team_id=1,
+            home_team_abbrev="BOS",
+            home_score=3,
+            away_team_id=2,
+            away_team_abbrev="NYR",
+            away_score=2,
+            game_state="FINAL",
+            period=4,
+            is_overtime=True,
+            is_shootout=False,
+        )
+
+        await downloader.persist(mock_db, [game])
+
+        call_args = mock_db.execute.call_args
+        assert call_args[0][14] == "OT"
+
+    async def test_persist_game_outcome_shootout(
+        self,
+        downloader: ScheduleDownloader,
+        mock_db: MagicMock,
+    ) -> None:
+        """Test game outcome is SO for shootout win."""
+        game = GameInfo(
+            game_id=2024020001,
+            season_id=20242025,
+            game_type=2,
+            game_date=date(2024, 10, 8),
+            start_time_utc=None,
+            venue_name=None,
+            home_team_id=1,
+            home_team_abbrev="BOS",
+            home_score=3,
+            away_team_id=2,
+            away_team_abbrev="NYR",
+            away_score=2,
+            game_state="FINAL",
+            period=5,
+            is_overtime=True,
+            is_shootout=True,
+        )
+
+        await downloader.persist(mock_db, [game])
+
+        call_args = mock_db.execute.call_args
+        assert call_args[0][14] == "SO"
+
+    async def test_persist_future_game_no_outcome(
+        self,
+        downloader: ScheduleDownloader,
+        mock_db: MagicMock,
+    ) -> None:
+        """Test future games have no game outcome."""
+        game = GameInfo(
+            game_id=2024020001,
+            season_id=20242025,
+            game_type=2,
+            game_date=date(2024, 12, 25),
+            start_time_utc=datetime(2024, 12, 25, 20, 0, tzinfo=UTC),
+            venue_name="TD Garden",
+            home_team_id=1,
+            home_team_abbrev="BOS",
+            home_score=None,
+            away_team_id=2,
+            away_team_abbrev="NYR",
+            away_score=None,
+            game_state="FUT",
+        )
+
+        await downloader.persist(mock_db, [game])
+
+        call_args = mock_db.execute.call_args
+        assert call_args[0][14] is None  # No game outcome for future games

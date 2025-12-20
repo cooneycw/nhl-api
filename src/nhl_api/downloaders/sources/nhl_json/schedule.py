@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any
 
 from nhl_api.downloaders.base.base_downloader import (
@@ -20,10 +20,20 @@ from nhl_api.downloaders.base.protocol import DownloadError
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+    from nhl_api.services.db import DatabaseService
+
 logger = logging.getLogger(__name__)
 
 # NHL JSON API base URL
 NHL_API_BASE_URL = "https://api-web.nhle.com/v1"
+
+# Map numeric game type to string code for database
+GAME_TYPE_MAP = {
+    1: "PR",  # Preseason
+    2: "R",  # Regular season
+    3: "P",  # Playoffs
+    4: "A",  # All-Star
+}
 
 
 @dataclass
@@ -314,6 +324,83 @@ class ScheduleDownloader(BaseDownloader):
             current_date += timedelta(days=7)
 
         return sorted(all_games, key=lambda g: (g.game_date, g.game_id))
+
+    async def persist(
+        self,
+        db: DatabaseService,
+        games: list[GameInfo],
+    ) -> int:
+        """Persist downloaded games to the database.
+
+        Uses upsert (INSERT ... ON CONFLICT) to handle re-downloads gracefully.
+        Updates scores and game state for games that already exist.
+
+        Args:
+            db: Database service instance
+            games: List of GameInfo objects to persist
+
+        Returns:
+            Number of games upserted
+        """
+        if not games:
+            return 0
+
+        count = 0
+        for game in games:
+            # Convert game_type int to string code
+            game_type_str = GAME_TYPE_MAP.get(game.game_type, "R")
+
+            # Extract time from start_time_utc if available
+            game_time: time | None = None
+            if game.start_time_utc:
+                game_time = game.start_time_utc.timetz()
+
+            # Determine game outcome from state
+            game_outcome: str | None = None
+            if game.game_state in ("OFF", "FINAL"):
+                if game.is_shootout:
+                    game_outcome = "SO"
+                elif game.is_overtime:
+                    game_outcome = "OT"
+                else:
+                    game_outcome = "REG"
+
+            await db.execute(
+                """
+                INSERT INTO games (
+                    game_id, season_id, game_type, game_date, game_time,
+                    home_team_id, away_team_id, home_score, away_score,
+                    period, game_state, is_overtime, is_shootout, game_outcome
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                ON CONFLICT (game_id, season_id) DO UPDATE SET
+                    home_score = EXCLUDED.home_score,
+                    away_score = EXCLUDED.away_score,
+                    period = EXCLUDED.period,
+                    game_state = EXCLUDED.game_state,
+                    is_overtime = EXCLUDED.is_overtime,
+                    is_shootout = EXCLUDED.is_shootout,
+                    game_outcome = EXCLUDED.game_outcome,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                game.game_id,
+                game.season_id,
+                game_type_str,
+                game.game_date,
+                game_time,
+                game.home_team_id,
+                game.away_team_id,
+                game.home_score,
+                game.away_score,
+                game.period,
+                game.game_state,
+                game.is_overtime,
+                game.is_shootout,
+                game_outcome,
+            )
+            count += 1
+
+        logger.info("Persisted %d games to database", count)
+        return count
 
 
 def create_schedule_downloader(
