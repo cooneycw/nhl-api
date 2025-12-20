@@ -1,0 +1,91 @@
+{
+  "copyright": "NHL and the NHL Shield are registered trademarks of the National Hockey League.",
+  "records": [
+    {
+      "standingsType": "regularSeason",
+      "league": {
+        "id": 133,
+        "name": "National Hockey League"
+      },
+      "division": {
+        "id": 15,
+        "name": "Pacific",
+        "abbreviation": "P"
+      },
+      "conference": {
+        "id": 5,
+        "name": "Western",
+        "abbreviation": "W"
+      },
+      "teamRecords": [
+        {
+          "team": {
+            "id": 22,
+            "name": "Edmonton Oilers",
+            "abbreviation": "EDM"
+          },
+          "leagueRecord": {
+            "wins": 22,
+            "losses": 8,
+            "ot": 2,
+            "type": "league"
+          },
+          "regulationWins": 18,
+          "goalsAgainst": 85,
+          "goalsScored": 120,
+          "points": 46,
+          "divisionRank": "1",
+          "divisionL10Rank": "1",
+          "divisionHomeRank": "2",
+          "divisionRoadRank": "1",
+          "conferenceRank": "2",
+          "conferenceL10Rank": "1",
+          "conferenceHomeRank": "3",
+          "conferenceRoadRank": "1",
+          "leagueRank": "3",
+          "leagueL10Rank": "2",
+          "leagueHomeRank": "5",
+          "leagueRoadRank": "2",
+          "wildCardRank": "0",
+          "row": 20,
+          "gamesPlayed": 32,
+          "streak": {
+            "streakType": "wins",
+            "streakNumber": 4,
+            "streakCode": "W4"
+          },
+          "clinchIndicator": "y",
+          "pointsPercentage": 0.719,
+          "ppDivisionRank": "1",
+          "ppConferenceRank": "2",
+          "ppLeagueRank": "3",
+          "lastUpdated": "2024-12-20T05:00:00Z"
+        },
+        {
+          "team": {
+            "id": 26,
+            "name": "Los Angeles Kings",
+            "abbreviation": "LAK"
+          },
+          "leagueRecord": {
+            "wins": 18,
+            "losses": 10,
+            "ot": 4,
+            "type": "league"
+          },
+          "regulationWins": 15,
+          "goalsAgainst": 90,
+          "goalsScored": 105,
+          "points": 40,
+          "divisionRank": "2",
+          "gamesPlayed": 32,
+          "streak": {
+            "streakType": "losses",
+            "streakNumber": 2,
+            "streakCode": "L2"
+          }
+        }
+      ]
+    }
+  ]
+}

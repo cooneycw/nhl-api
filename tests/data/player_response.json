@@ -1,0 +1,30 @@
+{
+  "id": 8478402,
+  "fullName": "Connor McDavid",
+  "firstName": "Connor",
+  "lastName": "McDavid",
+  "primaryNumber": "97",
+  "birthDate": "1997-01-13",
+  "birthCity": "Richmond Hill",
+  "birthStateProvince": "ON",
+  "birthCountry": "CAN",
+  "nationality": "CAN",
+  "height": "6' 1\"",
+  "weight": 193,
+  "active": true,
+  "alternateCaptain": false,
+  "captain": true,
+  "rookie": false,
+  "shootsCatches": "L",
+  "currentTeam": {
+    "id": 22,
+    "name": "Edmonton Oilers",
+    "abbreviation": "EDM"
+  },
+  "primaryPosition": {
+    "code": "C",
+    "name": "Center",
+    "type": "Forward",
+    "abbreviation": "C"
+  }
+}
