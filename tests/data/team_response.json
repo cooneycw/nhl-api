@@ -1,0 +1,30 @@
+{
+  "id": 22,
+  "name": "Edmonton Oilers",
+  "abbreviation": "EDM",
+  "teamName": "Oilers",
+  "locationName": "Edmonton",
+  "firstYearOfPlay": "1979",
+  "division": {
+    "id": 15,
+    "name": "Pacific",
+    "abbreviation": "P"
+  },
+  "conference": {
+    "id": 5,
+    "name": "Western",
+    "abbreviation": "W"
+  },
+  "venue": {
+    "id": 5100,
+    "name": "Rogers Place",
+    "city": "Edmonton",
+    "timeZone": {
+      "id": "America/Edmonton",
+      "offset": -7,
+      "tz": "MST"
+    }
+  },
+  "officialSiteUrl": "http://www.edmontonoilers.com/",
+  "active": true
+}

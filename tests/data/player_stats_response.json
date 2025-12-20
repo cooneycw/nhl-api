@@ -1,0 +1,44 @@
+{
+  "copyright": "NHL and the NHL Shield are registered trademarks of the National Hockey League.",
+  "stats": [
+    {
+      "type": {
+        "displayName": "statsSingleSeason"
+      },
+      "splits": [
+        {
+          "season": "20242025",
+          "stat": {
+            "timeOnIce": "900:00",
+            "assists": 45,
+            "goals": 22,
+            "pim": 18,
+            "shots": 150,
+            "games": 40,
+            "hits": 25,
+            "powerPlayGoals": 8,
+            "powerPlayPoints": 25,
+            "powerPlayTimeOnIce": "180:00",
+            "evenTimeOnIce": "700:00",
+            "penaltyMinutes": "18",
+            "faceOffPct": 51.2,
+            "shotPct": 14.67,
+            "gameWinningGoals": 4,
+            "overTimeGoals": 1,
+            "shortHandedGoals": 0,
+            "shortHandedPoints": 0,
+            "shortHandedTimeOnIce": "20:00",
+            "blocked": 15,
+            "plusMinus": 15,
+            "points": 67,
+            "shifts": 920,
+            "timeOnIcePerGame": "22:30",
+            "evenTimeOnIcePerGame": "17:30",
+            "shortHandedTimeOnIcePerGame": "00:30",
+            "powerPlayTimeOnIcePerGame": "04:30"
+          }
+        }
+      ]
+    }
+  ]
+}
