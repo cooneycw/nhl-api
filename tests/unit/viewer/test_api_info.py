@@ -40,15 +40,6 @@ class TestStubEndpoints:
         assert "message" in data
         assert "coming soon" in data["message"].lower()
 
-    def test_entities_list_returns_coming_soon(self, test_client: TestClient) -> None:
-        """Test entities list stub returns coming soon message."""
-        response = test_client.get("/api/v1/entities/")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert "message" in data
-        assert "coming soon" in data["message"].lower()
-
     def test_validation_status_returns_coming_soon(
         self, test_client: TestClient
     ) -> None:
