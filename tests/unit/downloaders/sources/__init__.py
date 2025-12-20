@@ -1,1 +1,1 @@
-"""Unit tests for source downloaders."""
+"""Tests for NHL data source downloaders."""
