@@ -83,6 +83,7 @@ select = [
     "W",      # pycodestyle warnings
     "F",      # Pyflakes
     "I",      # isort
+    "N",      # pep8-naming
     "B",      # flake8-bugbear
     "C4",     # flake8-comprehensions
     "UP",     # pyupgrade
@@ -94,12 +95,18 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["nhl_api"]
 
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
 # Mypy configuration (see issue #8 for full setup)
 [tool.mypy]
 python_version = "3.11"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
+warn_unused_ignores = true
 mypy_path = "src"
 packages = ["nhl_api"]
 
