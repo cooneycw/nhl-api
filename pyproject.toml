@@ -52,8 +52,13 @@ scraping = [
     "beautifulsoup4>=4.12.0",
     "lxml>=4.9.0",
 ]
+viewer = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic-settings>=2.5.0",
+]
 all = [
-    "nhl-api[dev,test,lint,selenium,scraping]",
+    "nhl-api[dev,test,lint,selenium,scraping,viewer]",
 ]
 
 [project.urls]
@@ -132,4 +137,8 @@ disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
 module = ["boto3.*", "botocore.*", "asyncpg.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["uvicorn.*", "fastapi.*"]
 ignore_missing_imports = true
