@@ -29,11 +29,9 @@ class TestApiInfo:
 class TestStubEndpoints:
     """Tests for stub endpoints."""
 
-    def test_monitoring_status_returns_coming_soon(
-        self, test_client: TestClient
-    ) -> None:
-        """Test monitoring status stub returns coming soon message."""
-        response = test_client.get("/api/v1/monitoring/status")
+    def test_entities_list_returns_coming_soon(self, test_client: TestClient) -> None:
+        """Test entities list stub returns coming soon message."""
+        response = test_client.get("/api/v1/entities/")
 
         assert response.status_code == 200
         data = response.json()
