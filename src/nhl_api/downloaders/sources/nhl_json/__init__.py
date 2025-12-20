@@ -21,6 +21,14 @@ from nhl_api.downloaders.sources.nhl_json.roster import (
     create_roster_downloader,
 )
 from nhl_api.downloaders.sources.nhl_json.schedule import ScheduleDownloader
+from nhl_api.downloaders.sources.nhl_json.standings import (
+    ParsedStandings,
+    RecordSplit,
+    StandingsDownloader,
+    StreakInfo,
+    TeamStandings,
+    create_standings_downloader,
+)
 
 __all__ = [
     "BoxscoreDownloader",
@@ -29,11 +37,17 @@ __all__ = [
     "NHL_TEAM_ABBREVS",
     "ParsedPlayByPlay",
     "ParsedRoster",
+    "ParsedStandings",
     "PlayByPlayDownloader",
     "PlayByPlayDownloaderConfig",
     "PlayerInfo",
+    "RecordSplit",
     "RosterDownloader",
     "ScheduleDownloader",
+    "StandingsDownloader",
+    "StreakInfo",
+    "TeamStandings",
     "create_play_by_play_downloader",
     "create_roster_downloader",
+    "create_standings_downloader",
 ]
