@@ -26,6 +26,16 @@ from nhl_api.viewer.schemas.entities import (
     TeamSummary,
     TeamWithRoster,
 )
+from nhl_api.viewer.schemas.reconciliation import (
+    BatchReconciliationRequest,
+    BatchReconciliationResponse,
+    GameReconciliation,
+    GameReconciliationDetail,
+    ReconciliationCheck,
+    ReconciliationDashboardResponse,
+    ReconciliationGamesResponse,
+    ReconciliationSummary,
+)
 
 __all__ = [
     # Downloads
@@ -52,4 +62,13 @@ __all__ = [
     "TeamListResponse",
     "TeamSummary",
     "TeamWithRoster",
+    # Reconciliation
+    "BatchReconciliationRequest",
+    "BatchReconciliationResponse",
+    "GameReconciliation",
+    "GameReconciliationDetail",
+    "ReconciliationCheck",
+    "ReconciliationDashboardResponse",
+    "ReconciliationGamesResponse",
+    "ReconciliationSummary",
 ]
