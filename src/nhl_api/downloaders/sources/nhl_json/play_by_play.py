@@ -320,7 +320,7 @@ class PlayByPlayDownloader(BaseDownloader):
         Raises:
             DownloadError: If the fetch fails
         """
-        path = f"/v1/gamecenter/{game_id}/play-by-play"
+        path = f"gamecenter/{game_id}/play-by-play"
         logger.debug("%s: Fetching play-by-play for game %d", self.source_name, game_id)
 
         try:
