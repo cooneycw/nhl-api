@@ -59,6 +59,9 @@ start_backend() {
         return 0
     fi
 
+    # Set PYTHONPATH to include src directory
+    export PYTHONPATH="$PROJECT_DIR/src:${PYTHONPATH:-}"
+
     # Start backend in background
     nohup uvicorn nhl_api.viewer.main:app --host 0.0.0.0 --port 8000 > /tmp/nhl-viewer-backend.log 2>&1 &
     echo $! > "$BACKEND_PID_FILE"

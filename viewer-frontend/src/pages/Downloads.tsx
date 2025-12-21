@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -14,6 +14,10 @@ import {
 } from '@/hooks/useDownloads'
 import { Download, X, Loader2, Play, AlertCircle } from 'lucide-react'
 
+// Source types to auto-select by default (NHL API sources)
+// Excludes: quanthockey, dailyfaceoff
+const DEFAULT_SELECTED_SOURCE_TYPES = ['nhl_json', 'html_report', 'shift_chart']
+
 export function Downloads() {
   const { data: options, isLoading: optionsLoading, error: optionsError } = useDownloadOptions()
   const { data: activeDownloads, isLoading: activeLoading } = useActiveDownloads()
@@ -22,6 +26,26 @@ export function Downloads() {
 
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>([])
   const [selectedSources, setSelectedSources] = useState<string[]>([])
+  const [initialized, setInitialized] = useState(false)
+
+  // Set default selections when options load
+  useEffect(() => {
+    if (options && !initialized) {
+      // Auto-select current season
+      const currentSeason = options.seasons.find((s) => s.is_current)
+      if (currentSeason) {
+        setSelectedSeasons([currentSeason.season_id])
+      }
+
+      // Auto-select NHL API and HTML Report sources (not quanthockey, shift_chart, dailyfaceoff)
+      const defaultSources = options.source_groups
+        .filter((g) => DEFAULT_SELECTED_SOURCE_TYPES.includes(g.source_type))
+        .flatMap((g) => g.sources.map((s) => s.name))
+      setSelectedSources(defaultSources)
+
+      setInitialized(true)
+    }
+  }, [options, initialized])
 
   const toggleSeason = (seasonId: number) => {
     setSelectedSeasons((prev) =>

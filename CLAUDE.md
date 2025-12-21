@@ -50,14 +50,17 @@ The project includes a FastAPI backend + React frontend for exploring downloaded
 
 | URL | Description |
 |-----|-------------|
-| http://localhost:8000/docs | **Swagger UI** - Interactive API explorer |
+| **http://localhost:5173** | **Frontend UI** - Main dashboard |
+| **http://localhost:5173/downloads** | **Downloads page** - Trigger & monitor downloads |
+| http://localhost:8000/docs | Swagger UI - Interactive API explorer |
 | http://localhost:8000/redoc | ReDoc API documentation |
 | http://localhost:8000/health | Health check endpoint |
 | http://localhost:8000/api/v1/players | Player data |
 | http://localhost:8000/api/v1/teams | Team data |
 | http://localhost:8000/api/v1/games | Game data |
-| http://localhost:8000/api/v1/monitoring/dashboard | Download progress dashboard |
-| http://localhost:5173 | Frontend UI (with `--full` flag) |
+| http://localhost:8000/api/v1/monitoring/dashboard | Download progress dashboard (API) |
+
+Note: Frontend URLs (5173) require `--full` flag.
 
 ### Logs
 
@@ -80,12 +83,15 @@ tail -f /tmp/nhl-viewer-frontend.log
 
 Use the `/viewer` command:
 ```
-/viewer          # Start backend
-/viewer --full   # Start backend + frontend
+/viewer          # Start backend only
+/viewer --full   # Start backend + frontend (recommended)
 /viewer --stop   # Stop viewer
+/viewer --status # Check status
 ```
 
-Then browse to http://localhost:8000/docs to explore the API interactively.
+Then browse to:
+- http://localhost:5173/downloads - Download UI (with `--full`)
+- http://localhost:8000/docs - API explorer
 
 ### Troubleshooting
 
