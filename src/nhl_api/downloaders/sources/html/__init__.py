@@ -62,6 +62,7 @@ from nhl_api.downloaders.sources.html.play_by_play import (
     PlayByPlayEvent,
     PlayerOnIce,
 )
+from nhl_api.downloaders.sources.html.registry import HTMLDownloaderRegistry
 from nhl_api.downloaders.sources.html.roster import (
     CoachInfo,
     OfficialInfo,
@@ -102,6 +103,7 @@ __all__ = [
     "GoalInfo",
     "HTML_DOWNLOADER_CONFIG",
     "HTMLDownloaderConfig",
+    "HTMLDownloaderRegistry",
     "OfficialInfo",
     "ParsedEventSummary",
     "ParsedFaceoffComparison",
