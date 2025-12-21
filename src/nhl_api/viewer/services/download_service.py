@@ -33,6 +33,7 @@ SOURCE_NAME_TO_ID = {
     "nhl_standings": 5,
     "nhl_player": 6,
     # HTML sources (7-15) will be added when implemented
+    "shift_chart": 16,  # NHL Stats API shift charts
 }
 
 
@@ -218,6 +219,10 @@ class DownloadService:
                 await self._run_nhl_json_download(
                     db, batch_id, source_name, season_id, force
                 )
+            elif source_type == "shift_chart":
+                await self._run_shift_chart_download(
+                    db, batch_id, source_name, season_id, force
+                )
             elif source_type == "html_report":
                 # HTML downloaders not yet implemented
                 logger.warning("HTML downloaders not yet implemented: %s", source_name)
@@ -298,6 +303,87 @@ class DownloadService:
                 await self._download_player_landing(
                     db, batch_id, downloader, season_id, active_download
                 )
+
+        await self._complete_batch(db, batch_id, "completed")
+
+    async def _run_shift_chart_download(
+        self,
+        db: DatabaseService,
+        batch_id: int,
+        source_name: str,
+        season_id: int,
+        force: bool,
+    ) -> None:
+        """Run a download for NHL Stats API shift charts."""
+        from nhl_api.downloaders.sources.nhl_json import ScheduleDownloader
+        from nhl_api.downloaders.sources.nhl_stats import (
+            ShiftChartsDownloader,
+            ShiftChartsDownloaderConfig,
+        )
+
+        active_download = self._active_downloads.get(batch_id)
+
+        # First get completed game IDs from schedule
+        schedule_config = DownloaderConfig(base_url=NHL_API_BASE_URL)
+        schedule_dl = ScheduleDownloader(schedule_config)
+        async with schedule_dl:
+            games = await schedule_dl.get_season_schedule(season_id)
+
+        # Filter to only completed games
+        completed_games = [g for g in games if g.game_state in ("OFF", "FINAL")]
+        game_ids = [g.game_id for g in completed_games]
+
+        logger.info(
+            "Downloading shift charts for %d completed games (filtered from %d total)",
+            len(game_ids),
+            len(games),
+        )
+
+        if active_download:
+            active_download.items_total = len(game_ids)
+
+        await db.execute(
+            "UPDATE import_batches SET items_total = $1 WHERE batch_id = $2",
+            len(game_ids),
+            batch_id,
+        )
+
+        # Create shift charts downloader
+        config = ShiftChartsDownloaderConfig()
+        shift_dl = ShiftChartsDownloader(config, game_ids=game_ids)
+
+        # Collect results for batch persistence
+        successful_results: list[Any] = []
+
+        async with shift_dl:
+            async for result in shift_dl.download_season(season_id):
+                if active_download and active_download.cancel_requested:
+                    raise asyncio.CancelledError()
+
+                if result.is_successful:
+                    successful_results.append(result.data)
+                    if active_download:
+                        active_download.items_completed += 1
+                    await db.execute(
+                        "UPDATE import_batches SET items_success = items_success + 1 WHERE batch_id = $1",
+                        batch_id,
+                    )
+                else:
+                    if active_download:
+                        active_download.items_failed += 1
+                    await db.execute(
+                        "UPDATE import_batches SET items_failed = items_failed + 1 WHERE batch_id = $1",
+                        batch_id,
+                    )
+
+        # Persist all collected shift charts
+        if successful_results:
+            persisted = await shift_dl.persist(db, successful_results)
+            logger.info(
+                "Persisted %d shifts for season %d",
+                persisted,
+                season_id,
+            )
 
         await self._complete_batch(db, batch_id, "completed")
 
