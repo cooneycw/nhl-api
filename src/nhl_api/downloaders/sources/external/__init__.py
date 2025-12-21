@@ -6,33 +6,21 @@ from external (non-NHL) sources like QuantHockey and DailyFaceoff.
 External sources require more conservative rate limiting and custom
 User-Agent headers to respect third-party site policies.
 
-Subpackages (future):
+Subpackages:
 - quanthockey: QuantHockey historical statistics
-- dailyfaceoff: DailyFaceoff lineup and injury data
+- dailyfaceoff: DailyFaceoff lineup and injury data (future)
 
 Example usage:
     from nhl_api.downloaders.sources.external import (
-        BaseExternalDownloader,
-        ExternalDownloaderConfig,
+        QuantHockeyPlayerStatsDownloader,
+        QuantHockeyConfig,
     )
 
-    class QuantHockeyDownloader(BaseExternalDownloader):
-        @property
-        def source_name(self) -> str:
-            return "quanthockey_stats"
-
-        async def _parse_response(
-            self, response: HTTPResponse, context: dict[str, Any]
-        ) -> dict[str, Any]:
-            # Parse QuantHockey HTML
-            ...
-
-    config = ExternalDownloaderConfig(
-        base_url="https://www.quanthockey.com",
-        requests_per_second=0.5,
-    )
-    async with QuantHockeyDownloader(config) as downloader:
-        result = await downloader.fetch_resource("/stats/page")
+    config = QuantHockeyConfig()
+    async with QuantHockeyPlayerStatsDownloader(config) as downloader:
+        stats = await downloader.download_season(20242025, max_players=100)
+        for player in stats:
+            print(f"{player.name}: {player.points} points")
 """
 
 from nhl_api.downloaders.sources.external.base_external_downloader import (
@@ -42,11 +30,21 @@ from nhl_api.downloaders.sources.external.base_external_downloader import (
     ExternalSourceError,
     ValidationError,
 )
+from nhl_api.downloaders.sources.external.quanthockey import (
+    QuantHockeyPlayerStatsDownloader,
+)
+from nhl_api.downloaders.sources.external.quanthockey.player_stats import (
+    QuantHockeyConfig,
+)
 
 __all__ = [
+    # Base classes
     "BaseExternalDownloader",
     "ContentParsingError",
     "ExternalDownloaderConfig",
     "ExternalSourceError",
     "ValidationError",
+    # QuantHockey
+    "QuantHockeyConfig",
+    "QuantHockeyPlayerStatsDownloader",
 ]
