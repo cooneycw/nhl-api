@@ -679,3 +679,339 @@ class TestCreateRosterDownloader:
         downloader = create_roster_downloader()
 
         assert downloader.config.health_check_url == "roster/BOS/current"
+
+
+@pytest.mark.unit
+class TestRosterDownloaderPersist:
+    """Tests for RosterDownloader.persist() method."""
+
+    @pytest.fixture
+    def mock_http_client(self) -> MagicMock:
+        """Create a mock HTTP client."""
+        client = MagicMock()
+        client.get = AsyncMock()
+        client.close = AsyncMock()
+        return client
+
+    @pytest.fixture
+    def mock_rate_limiter(self) -> MagicMock:
+        """Create a mock rate limiter."""
+        limiter = MagicMock()
+        limiter.wait = AsyncMock()
+        return limiter
+
+    @pytest.fixture
+    def config(self) -> DownloaderConfig:
+        """Create a test configuration."""
+        return DownloaderConfig(
+            base_url="https://api-web.nhle.com/v1",
+            requests_per_second=10.0,
+        )
+
+    @pytest.fixture
+    def downloader(
+        self,
+        config: DownloaderConfig,
+        mock_http_client: MagicMock,
+        mock_rate_limiter: MagicMock,
+    ) -> RosterDownloader:
+        """Create a RosterDownloader with mock HTTP client."""
+        dl = RosterDownloader(
+            config,
+            http_client=mock_http_client,
+            rate_limiter=mock_rate_limiter,
+        )
+        dl._owns_http_client = False
+        return dl
+
+    @pytest.fixture
+    def mock_db(self) -> MagicMock:
+        """Create a mock DatabaseService."""
+        db = MagicMock()
+        db.execute = AsyncMock()
+        return db
+
+    @pytest.fixture
+    def sample_roster(self) -> ParsedRoster:
+        """Create a sample roster for testing."""
+        forward = PlayerInfo(
+            player_id=8478402,
+            first_name="David",
+            last_name="Pastrnak",
+            sweater_number=88,
+            position_code="R",
+            shoots_catches="R",
+            height_inches=72,
+            weight_pounds=194,
+            height_cm=183,
+            weight_kg=88,
+            birth_date=date(1996, 5, 25),
+            birth_city="Havirov",
+            birth_country="CZE",
+            birth_state_province=None,
+            headshot_url="https://example.com/pastrnak.png",
+            team_abbrev="BOS",
+        )
+        defenseman = PlayerInfo(
+            player_id=8479325,
+            first_name="Charlie",
+            last_name="McAvoy",
+            sweater_number=73,
+            position_code="D",
+            shoots_catches="R",
+            height_inches=72,
+            weight_pounds=209,
+            height_cm=183,
+            weight_kg=95,
+            birth_date=date(1997, 12, 21),
+            birth_city="Long Beach",
+            birth_country="USA",
+            birth_state_province="NY",
+            headshot_url="https://example.com/mcavoy.png",
+            team_abbrev="BOS",
+        )
+        goalie = PlayerInfo(
+            player_id=8480280,
+            first_name="Jeremy",
+            last_name="Swayman",
+            sweater_number=1,
+            position_code="G",
+            shoots_catches="L",
+            height_inches=74,
+            weight_pounds=195,
+            height_cm=188,
+            weight_kg=88,
+            birth_date=date(1998, 11, 24),
+            birth_city="Anchorage",
+            birth_country="USA",
+            birth_state_province="AK",
+            headshot_url="https://example.com/swayman.png",
+            team_abbrev="BOS",
+        )
+        return ParsedRoster(
+            team_abbrev="BOS",
+            season_id=20242025,
+            forwards=(forward,),
+            defensemen=(defenseman,),
+            goalies=(goalie,),
+        )
+
+    @pytest.mark.asyncio
+    async def test_persist_empty_list(
+        self,
+        downloader: RosterDownloader,
+        mock_db: MagicMock,
+    ) -> None:
+        """Test persisting an empty roster list returns 0."""
+        result = await downloader.persist(mock_db, [])
+
+        assert result == 0
+        mock_db.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_persist_single_roster(
+        self,
+        downloader: RosterDownloader,
+        mock_db: MagicMock,
+        sample_roster: ParsedRoster,
+    ) -> None:
+        """Test persisting a single roster with multiple players."""
+        result = await downloader.persist(mock_db, [sample_roster])
+
+        # Should persist 3 players (forward, defenseman, goalie)
+        assert result == 3
+        # 6 calls: 2 per player (player insert + roster insert)
+        assert mock_db.execute.call_count == 6
+
+    @pytest.mark.asyncio
+    async def test_persist_multiple_rosters(
+        self,
+        downloader: RosterDownloader,
+        mock_db: MagicMock,
+        sample_roster: ParsedRoster,
+    ) -> None:
+        """Test persisting multiple rosters."""
+        # Create a second roster
+        second_roster = ParsedRoster(
+            team_abbrev="NYR",
+            season_id=20242025,
+            forwards=(
+                PlayerInfo(
+                    player_id=8478550,
+                    first_name="Artemi",
+                    last_name="Panarin",
+                    sweater_number=10,
+                    position_code="L",
+                    shoots_catches="R",
+                    height_inches=71,
+                    weight_pounds=180,
+                    height_cm=180,
+                    weight_kg=82,
+                    birth_date=date(1991, 10, 30),
+                    birth_city="Korkino",
+                    birth_country="RUS",
+                    birth_state_province=None,
+                    headshot_url="https://example.com/panarin.png",
+                    team_abbrev="NYR",
+                ),
+            ),
+            defensemen=(),
+            goalies=(),
+        )
+
+        result = await downloader.persist(mock_db, [sample_roster, second_roster])
+
+        # 3 from first roster + 1 from second roster
+        assert result == 4
+        # 8 calls: 6 from first roster + 2 from second roster
+        assert mock_db.execute.call_count == 8
+
+    @pytest.mark.asyncio
+    async def test_persist_roster_type_assignment(
+        self,
+        downloader: RosterDownloader,
+        mock_db: MagicMock,
+        sample_roster: ParsedRoster,
+    ) -> None:
+        """Test that roster_type is assigned correctly based on position."""
+        await downloader.persist(mock_db, [sample_roster])
+
+        # Check the roster insert calls for roster_type
+        calls = mock_db.execute.call_args_list
+
+        # Forward (position R) should be 'forward'
+        roster_call_1 = calls[1]  # Second call is roster insert for forward
+        assert roster_call_1[0][0].strip().startswith("INSERT INTO team_rosters")
+        assert roster_call_1[0][6] == "forward"
+
+        # Defenseman (position D) should be 'defenseman'
+        roster_call_2 = calls[3]  # Fourth call is roster insert for defenseman
+        assert roster_call_2[0][6] == "defenseman"
+
+        # Goalie (position G) should be 'goalie'
+        roster_call_3 = calls[5]  # Sixth call is roster insert for goalie
+        assert roster_call_3[0][6] == "goalie"
+
+    @pytest.mark.asyncio
+    async def test_persist_uses_default_season_when_none(
+        self,
+        downloader: RosterDownloader,
+        mock_db: MagicMock,
+    ) -> None:
+        """Test that persist uses default season when roster.season_id is None."""
+        roster = ParsedRoster(
+            team_abbrev="BOS",
+            season_id=None,  # No season ID
+            forwards=(
+                PlayerInfo(
+                    player_id=12345,
+                    first_name="Test",
+                    last_name="Player",
+                    sweater_number=99,
+                    position_code="C",
+                    shoots_catches="L",
+                    height_inches=72,
+                    weight_pounds=200,
+                    height_cm=183,
+                    weight_kg=91,
+                    birth_date=None,
+                    birth_city=None,
+                    birth_country=None,
+                    birth_state_province=None,
+                    headshot_url=None,
+                    team_abbrev="BOS",
+                ),
+            ),
+            defensemen=(),
+            goalies=(),
+        )
+
+        await downloader.persist(mock_db, [roster])
+
+        # Check that season_id defaulted to 20242025
+        roster_insert_call = mock_db.execute.call_args_list[1]
+        # Position 2 in the args is season_id
+        assert roster_insert_call[0][2] == 20242025
+
+    @pytest.mark.asyncio
+    async def test_persist_handles_zero_height_weight(
+        self,
+        downloader: RosterDownloader,
+        mock_db: MagicMock,
+    ) -> None:
+        """Test that zero height/weight are converted to None."""
+        roster = ParsedRoster(
+            team_abbrev="BOS",
+            season_id=20242025,
+            forwards=(
+                PlayerInfo(
+                    player_id=12345,
+                    first_name="Test",
+                    last_name="Player",
+                    sweater_number=None,
+                    position_code="C",
+                    shoots_catches="",
+                    height_inches=0,  # Zero height
+                    weight_pounds=0,  # Zero weight
+                    height_cm=0,
+                    weight_kg=0,
+                    birth_date=None,
+                    birth_city=None,
+                    birth_country=None,
+                    birth_state_province=None,
+                    headshot_url=None,
+                    team_abbrev="BOS",
+                ),
+            ),
+            defensemen=(),
+            goalies=(),
+        )
+
+        await downloader.persist(mock_db, [roster])
+
+        # Check player insert call
+        player_insert_call = mock_db.execute.call_args_list[0]
+        # Position 8 is height_inches, position 9 is weight_lbs
+        assert player_insert_call[0][8] is None  # height_inches
+        assert player_insert_call[0][9] is None  # weight_lbs
+        assert (
+            player_insert_call[0][10] is None
+        )  # shoots_catches (empty string -> None)
+
+    @pytest.mark.asyncio
+    async def test_persist_player_upsert_sql_structure(
+        self,
+        downloader: RosterDownloader,
+        mock_db: MagicMock,
+        sample_roster: ParsedRoster,
+    ) -> None:
+        """Test that player upsert SQL has correct structure."""
+        await downloader.persist(mock_db, [sample_roster])
+
+        # Check the first call (player insert)
+        player_call = mock_db.execute.call_args_list[0]
+        sql = player_call[0][0]
+
+        # Verify key SQL elements
+        assert "INSERT INTO players" in sql
+        assert "ON CONFLICT (player_id) DO UPDATE SET" in sql
+        assert "updated_at = CURRENT_TIMESTAMP" in sql
+
+    @pytest.mark.asyncio
+    async def test_persist_roster_upsert_sql_structure(
+        self,
+        downloader: RosterDownloader,
+        mock_db: MagicMock,
+        sample_roster: ParsedRoster,
+    ) -> None:
+        """Test that roster upsert SQL has correct structure."""
+        await downloader.persist(mock_db, [sample_roster])
+
+        # Check the second call (roster insert)
+        roster_call = mock_db.execute.call_args_list[1]
+        sql = roster_call[0][0]
+
+        # Verify key SQL elements
+        assert "INSERT INTO team_rosters" in sql
+        assert "ON CONFLICT (team_abbrev, season_id, player_id, snapshot_date)" in sql
+        assert "DO UPDATE SET" in sql
