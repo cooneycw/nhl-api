@@ -52,9 +52,18 @@ from nhl_api.downloaders.sources.html.play_by_play import (
     PlayByPlayEvent,
     PlayerOnIce,
 )
+from nhl_api.downloaders.sources.html.roster import (
+    CoachInfo,
+    OfficialInfo,
+    ParsedRoster,
+    PlayerRoster,
+    RosterDownloader,
+    TeamRoster,
+)
 
 __all__ = [
     "BaseHTMLDownloader",
+    "CoachInfo",
     "EventPlayer",
     "EventSummaryDownloader",
     "FaceoffStat",
@@ -64,10 +73,12 @@ __all__ = [
     "GoalInfo",
     "HTML_DOWNLOADER_CONFIG",
     "HTMLDownloaderConfig",
+    "OfficialInfo",
     "ParsedEventSummary",
     "ParsedFaceoffSummary",
     "ParsedGameSummary",
     "ParsedPlayByPlay",
+    "ParsedRoster",
     "PenaltyInfo",
     "PeriodFaceoffs",
     "PlayByPlayDownloader",
@@ -75,10 +86,13 @@ __all__ = [
     "PlayerFaceoffStats",
     "PlayerInfo",
     "PlayerOnIce",
+    "PlayerRoster",
     "PlayerStats",
+    "RosterDownloader",
     "StrengthFaceoffs",
     "TeamEventSummary",
     "TeamFaceoffSummary",
     "TeamInfo",
+    "TeamRoster",
     "ZoneFaceoffs",
 ]
