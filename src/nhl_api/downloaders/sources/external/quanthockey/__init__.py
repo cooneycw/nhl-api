@@ -6,10 +6,16 @@ quanthockey.com, including:
 - Career/all-time player statistics
 """
 
+from nhl_api.downloaders.sources.external.quanthockey.career_stats import (
+    CareerStatCategory,
+    QuantHockeyCareerStatsDownloader,
+)
 from nhl_api.downloaders.sources.external.quanthockey.player_stats import (
     QuantHockeyPlayerStatsDownloader,
 )
 
 __all__ = [
+    "CareerStatCategory",
+    "QuantHockeyCareerStatsDownloader",
     "QuantHockeyPlayerStatsDownloader",
 ]
