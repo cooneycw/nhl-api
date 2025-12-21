@@ -400,14 +400,22 @@ class DownloadService:
                     batch_id,
                 )
 
-        # Persist collected results for boxscore
-        if source_name == "nhl_boxscore" and successful_results:
-            await downloader.persist(db, successful_results)
-            logger.info(
-                "Persisted %d boxscores for season %d",
-                len(successful_results),
-                season_id,
-            )
+        # Persist collected results
+        if successful_results:
+            if source_name == "nhl_boxscore":
+                await downloader.persist(db, successful_results)
+                logger.info(
+                    "Persisted %d boxscores for season %d",
+                    len(successful_results),
+                    season_id,
+                )
+            elif source_name == "nhl_pbp":
+                persisted = await downloader.persist(db, successful_results)
+                logger.info(
+                    "Persisted %d play-by-play events for season %d",
+                    persisted,
+                    season_id,
+                )
 
     async def _download_rosters(
         self,
