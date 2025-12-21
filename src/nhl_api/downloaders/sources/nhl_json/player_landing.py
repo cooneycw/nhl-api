@@ -33,6 +33,7 @@ from nhl_api.downloaders.base.protocol import (
 if TYPE_CHECKING:
     from nhl_api.downloaders.base.rate_limiter import RateLimiter
     from nhl_api.downloaders.base.retry_handler import RetryHandler
+    from nhl_api.services.db import DatabaseService
     from nhl_api.utils.http_client import HTTPClient
 
 logger = logging.getLogger(__name__)
@@ -1125,3 +1126,189 @@ class PlayerLandingDownloader(BaseDownloader):
             "toi": game.toi,
             "games_started": game.games_started,
         }
+
+    async def persist(
+        self,
+        db: DatabaseService,
+        players: list[dict[str, Any]],
+    ) -> int:
+        """Persist downloaded player landing data to the database.
+
+        This method updates the players table with extended biographical
+        and career data from the landing page. It uses upsert semantics
+        to handle re-downloads gracefully.
+
+        Args:
+            db: Database service instance
+            players: List of player data dictionaries from download_all()
+
+        Returns:
+            Number of players upserted
+        """
+        if not players:
+            return 0
+
+        count = 0
+        for player_data in players:
+            try:
+                await self._persist_player(db, player_data)
+                count += 1
+            except Exception as e:
+                logger.warning(
+                    "Failed to persist player %s: %s",
+                    player_data.get("player_id"),
+                    e,
+                )
+
+        logger.info("Persisted landing data for %d players", count)
+        return count
+
+    async def _persist_player(
+        self, db: DatabaseService, player: dict[str, Any]
+    ) -> None:
+        """Persist a single player's landing data.
+
+        Args:
+            db: Database service instance
+            player: Player data dictionary
+        """
+        # Extract draft details
+        draft = player.get("draft_details") or {}
+        draft_year = draft.get("year")
+        draft_round = draft.get("round")
+        draft_pick = draft.get("pick_in_round")
+        draft_overall = draft.get("overall_pick")
+        draft_team = draft.get("team_abbrev")
+
+        # Extract career stats (depends on whether player is goalie)
+        is_goalie = player.get("is_goalie", False)
+        career = player.get("career_regular_season") or {}
+
+        if is_goalie:
+            # Goalie career stats
+            career_gp = career.get("games_played")
+            career_goals = career.get("goals")
+            career_assists = career.get("assists")
+            career_points = (
+                (career_goals or 0) + (career_assists or 0)
+                if career_goals is not None or career_assists is not None
+                else None
+            )
+            career_plus_minus = None  # Goalies don't have +/-
+            career_pim = career.get("pim")
+            career_wins = career.get("wins")
+            career_losses = career.get("losses")
+            career_ot_losses = career.get("ot_losses")
+            career_shutouts = career.get("shutouts")
+            career_gaa = career.get("goals_against_avg")
+            career_save_pct = career.get("save_pct")
+        else:
+            # Skater career stats
+            career_gp = career.get("games_played")
+            career_goals = career.get("goals")
+            career_assists = career.get("assists")
+            career_points = career.get("points")
+            career_plus_minus = career.get("plus_minus")
+            career_pim = career.get("pim")
+            career_wins = None
+            career_losses = None
+            career_ot_losses = None
+            career_shutouts = None
+            career_gaa = None
+            career_save_pct = None
+
+        await db.execute(
+            """
+            INSERT INTO players (
+                player_id, first_name, last_name,
+                birth_date, birth_city, birth_state_province, birth_country,
+                height_inches, weight_lbs, shoots_catches, primary_position,
+                current_team_id, sweater_number, headshot_url, hero_image_url,
+                draft_year, draft_round, draft_pick, draft_overall, draft_team_abbrev,
+                career_gp, career_goals, career_assists, career_points,
+                career_plus_minus, career_pim,
+                career_wins, career_losses, career_ot_losses, career_shutouts,
+                career_gaa, career_save_pct,
+                in_top_100_all_time, in_hhof, active
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+                $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28,
+                $29, $30, $31, $32, $33, $34, $35
+            )
+            ON CONFLICT (player_id) DO UPDATE SET
+                first_name = EXCLUDED.first_name,
+                last_name = EXCLUDED.last_name,
+                birth_date = COALESCE(EXCLUDED.birth_date, players.birth_date),
+                birth_city = COALESCE(EXCLUDED.birth_city, players.birth_city),
+                birth_state_province = COALESCE(
+                    EXCLUDED.birth_state_province, players.birth_state_province
+                ),
+                birth_country = COALESCE(EXCLUDED.birth_country, players.birth_country),
+                height_inches = COALESCE(EXCLUDED.height_inches, players.height_inches),
+                weight_lbs = COALESCE(EXCLUDED.weight_lbs, players.weight_lbs),
+                shoots_catches = COALESCE(EXCLUDED.shoots_catches, players.shoots_catches),
+                primary_position = COALESCE(EXCLUDED.primary_position, players.primary_position),
+                current_team_id = COALESCE(EXCLUDED.current_team_id, players.current_team_id),
+                sweater_number = COALESCE(EXCLUDED.sweater_number, players.sweater_number),
+                headshot_url = COALESCE(EXCLUDED.headshot_url, players.headshot_url),
+                hero_image_url = COALESCE(EXCLUDED.hero_image_url, players.hero_image_url),
+                draft_year = COALESCE(EXCLUDED.draft_year, players.draft_year),
+                draft_round = COALESCE(EXCLUDED.draft_round, players.draft_round),
+                draft_pick = COALESCE(EXCLUDED.draft_pick, players.draft_pick),
+                draft_overall = COALESCE(EXCLUDED.draft_overall, players.draft_overall),
+                draft_team_abbrev = COALESCE(
+                    EXCLUDED.draft_team_abbrev, players.draft_team_abbrev
+                ),
+                career_gp = EXCLUDED.career_gp,
+                career_goals = EXCLUDED.career_goals,
+                career_assists = EXCLUDED.career_assists,
+                career_points = EXCLUDED.career_points,
+                career_plus_minus = EXCLUDED.career_plus_minus,
+                career_pim = EXCLUDED.career_pim,
+                career_wins = EXCLUDED.career_wins,
+                career_losses = EXCLUDED.career_losses,
+                career_ot_losses = EXCLUDED.career_ot_losses,
+                career_shutouts = EXCLUDED.career_shutouts,
+                career_gaa = EXCLUDED.career_gaa,
+                career_save_pct = EXCLUDED.career_save_pct,
+                in_top_100_all_time = EXCLUDED.in_top_100_all_time,
+                in_hhof = EXCLUDED.in_hhof,
+                active = EXCLUDED.active,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            player.get("player_id"),
+            player.get("first_name"),
+            player.get("last_name"),
+            player.get("birth_date") or None,
+            player.get("birth_city") or None,
+            player.get("birth_state_province"),
+            player.get("birth_country") or None,
+            player.get("height_inches") if player.get("height_inches", 0) > 0 else None,
+            player.get("weight_lbs") if player.get("weight_lbs", 0) > 0 else None,
+            player.get("shoots_catches") or None,
+            player.get("position") or None,
+            player.get("current_team_id"),
+            player.get("sweater_number"),
+            player.get("headshot_url"),
+            player.get("hero_image_url"),
+            draft_year,
+            draft_round,
+            draft_pick,
+            draft_overall,
+            draft_team,
+            career_gp,
+            career_goals,
+            career_assists,
+            career_points,
+            career_plus_minus,
+            career_pim,
+            career_wins,
+            career_losses,
+            career_ot_losses,
+            career_shutouts,
+            career_gaa,
+            career_save_pct,
+            player.get("in_top_100_all_time", False),
+            player.get("in_hhof", False),
+            player.get("is_active", True),
+        )

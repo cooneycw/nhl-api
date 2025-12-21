@@ -609,7 +609,7 @@ class DownloadService:
         season_id: int,
         active_download: ActiveDownloadTask | None,
     ) -> None:
-        """Download player landing pages."""
+        """Download player landing pages and persist to database."""
         # Get player IDs from rosters
         from nhl_api.downloaders.sources.nhl_json import (
             NHL_TEAM_ABBREVS,
@@ -642,12 +642,16 @@ class DownloadService:
             batch_id,
         )
 
+        # Collect successful results for persistence
+        successful_results: list[dict[str, Any]] = []
+
         # Download each player
         async for result in downloader.download_all():
             if active_download and active_download.cancel_requested:
                 raise asyncio.CancelledError()
 
             if result.is_successful:
+                successful_results.append(result.data)
                 if active_download:
                     active_download.items_completed += 1
                 await db.execute(
@@ -661,6 +665,15 @@ class DownloadService:
                     "UPDATE import_batches SET items_failed = items_failed + 1 WHERE batch_id = $1",
                     batch_id,
                 )
+
+        # Persist collected player data
+        if successful_results:
+            persisted = await downloader.persist(db, successful_results)
+            logger.info(
+                "Persisted landing data for %d players for season %d",
+                persisted,
+                season_id,
+            )
 
     async def _complete_batch(
         self,
