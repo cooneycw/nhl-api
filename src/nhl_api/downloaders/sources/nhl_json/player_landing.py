@@ -576,7 +576,7 @@ class PlayerLandingDownloader(BaseDownloader):
         Raises:
             DownloadError: If the fetch fails
         """
-        path = f"/v1/player/{player_id}/landing"
+        path = f"player/{player_id}/landing"
         logger.debug("%s: Fetching landing for player %d", self.source_name, player_id)
 
         try:

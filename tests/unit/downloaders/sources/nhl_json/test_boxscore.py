@@ -947,3 +947,339 @@ class TestBoxscoreDownloaderParsing:
         assert result["home_team"]["abbrev"] == "TOR"
         assert result["away_team"]["score"] == 2
         assert result["venue_name"] == "Scotiabank Arena"
+
+
+class TestBoxscoreDownloaderHelperMethods:
+    """Tests for BoxscoreDownloader helper methods."""
+
+    def test_toi_to_seconds_standard(self) -> None:
+        """Test converting standard MM:SS format."""
+        assert BoxscoreDownloader._toi_to_seconds("15:30") == 930
+        assert BoxscoreDownloader._toi_to_seconds("22:15") == 1335
+        assert BoxscoreDownloader._toi_to_seconds("0:45") == 45
+        assert BoxscoreDownloader._toi_to_seconds("60:00") == 3600
+
+    def test_toi_to_seconds_edge_cases(self) -> None:
+        """Test edge cases for TOI conversion."""
+        assert BoxscoreDownloader._toi_to_seconds("") == 0
+        assert BoxscoreDownloader._toi_to_seconds("invalid") == 0
+        assert BoxscoreDownloader._toi_to_seconds("0:00") == 0
+
+    def test_toi_to_seconds_malformed(self) -> None:
+        """Test malformed TOI strings return 0."""
+        assert BoxscoreDownloader._toi_to_seconds("abc:def") == 0
+        assert BoxscoreDownloader._toi_to_seconds(":") == 0
+
+    def test_parse_saves_shots_standard(self) -> None:
+        """Test parsing standard saves/shots format."""
+        assert BoxscoreDownloader._parse_saves_shots("25/27") == (25, 27)
+        assert BoxscoreDownloader._parse_saves_shots("30/35") == (30, 35)
+        assert BoxscoreDownloader._parse_saves_shots("0/0") == (0, 0)
+
+    def test_parse_saves_shots_edge_cases(self) -> None:
+        """Test edge cases for saves/shots parsing."""
+        assert BoxscoreDownloader._parse_saves_shots("") == (0, 0)
+        assert BoxscoreDownloader._parse_saves_shots("invalid") == (0, 0)
+        assert BoxscoreDownloader._parse_saves_shots("/") == (0, 0)
+
+    def test_parse_saves_shots_malformed(self) -> None:
+        """Test malformed saves/shots strings."""
+        assert BoxscoreDownloader._parse_saves_shots("abc/def") == (0, 0)
+        assert BoxscoreDownloader._parse_saves_shots("25/abc") == (25, 0)
+
+    def test_dict_to_boxscore(self) -> None:
+        """Test converting dict to ParsedBoxscore."""
+        downloader = BoxscoreDownloader()
+
+        data = {
+            "game_id": 2024020500,
+            "season_id": 20242025,
+            "game_date": "2024-12-15",
+            "game_type": 2,
+            "game_state": "OFF",
+            "venue_name": "Scotiabank Arena",
+            "is_overtime": False,
+            "is_shootout": False,
+            "home_team": {
+                "team_id": 10,
+                "abbrev": "TOR",
+                "name": "Maple Leafs",
+                "score": 4,
+                "shots_on_goal": 32,
+            },
+            "away_team": {
+                "team_id": 8,
+                "abbrev": "MTL",
+                "name": "Canadiens",
+                "score": 2,
+                "shots_on_goal": 28,
+            },
+            "home_skaters": [
+                {
+                    "player_id": 8478483,
+                    "name": "Auston Matthews",
+                    "position": "C",
+                    "goals": 2,
+                    "assists": 1,
+                    "toi": "22:15",
+                }
+            ],
+            "away_skaters": [],
+            "home_goalies": [],
+            "away_goalies": [],
+        }
+
+        result = downloader._dict_to_boxscore(data)
+
+        assert result.game_id == 2024020500
+        assert result.home_team.abbrev == "TOR"
+        assert result.away_team.score == 2
+        assert len(result.home_skaters) == 1
+        assert result.home_skaters[0].player_id == 8478483
+
+    def test_dict_to_boxscore_empty_dict(self) -> None:
+        """Test converting empty dict uses defaults."""
+        downloader = BoxscoreDownloader()
+
+        result = downloader._dict_to_boxscore({})
+
+        assert result.game_id == 0
+        assert result.season_id == 0
+        assert result.home_team.team_id == 0
+        assert len(result.home_skaters) == 0
+
+
+@pytest.mark.asyncio
+class TestBoxscoreDownloaderPersist:
+    """Tests for BoxscoreDownloader.persist method."""
+
+    async def test_persist_empty_list(self) -> None:
+        """Test persist with empty list returns 0."""
+        downloader = BoxscoreDownloader()
+        mock_db = AsyncMock()
+
+        count = await downloader.persist(mock_db, [])
+
+        assert count == 0
+        mock_db.execute.assert_not_called()
+
+    async def test_persist_single_boxscore(self) -> None:
+        """Test persisting a single boxscore."""
+        downloader = BoxscoreDownloader()
+        mock_db = AsyncMock()
+
+        boxscore = ParsedBoxscore(
+            game_id=2024020500,
+            season_id=20242025,
+            game_date="2024-12-15",
+            game_type=2,
+            game_state="OFF",
+            home_team=TeamBoxscore(
+                team_id=10,
+                abbrev="TOR",
+                name="Maple Leafs",
+                score=4,
+                shots_on_goal=32,
+                is_home=True,
+            ),
+            away_team=TeamBoxscore(
+                team_id=8,
+                abbrev="MTL",
+                name="Canadiens",
+                score=2,
+                shots_on_goal=28,
+                is_home=False,
+            ),
+            home_skaters=[
+                SkaterStats(
+                    player_id=8478483,
+                    name="Auston Matthews",
+                    sweater_number=34,
+                    position="C",
+                    goals=2,
+                    assists=1,
+                    points=3,
+                    plus_minus=2,
+                    pim=0,
+                    shots=5,
+                    hits=2,
+                    blocked_shots=0,
+                    giveaways=1,
+                    takeaways=2,
+                    faceoff_pct=55.5,
+                    toi="22:15",
+                    shifts=28,
+                    power_play_goals=1,
+                    shorthanded_goals=0,
+                    team_id=10,
+                ),
+            ],
+            away_skaters=[],
+            home_goalies=[
+                GoalieStats(
+                    player_id=8479361,
+                    name="Joseph Woll",
+                    sweater_number=60,
+                    saves=26,
+                    shots_against=28,
+                    goals_against=2,
+                    save_pct=0.929,
+                    toi="60:00",
+                    even_strength_shots_against="20/21",
+                    power_play_shots_against="4/5",
+                    shorthanded_shots_against="2/2",
+                    is_starter=True,
+                    decision="W",
+                    team_id=10,
+                ),
+            ],
+            away_goalies=[],
+            venue_name="Scotiabank Arena",
+            is_overtime=False,
+            is_shootout=False,
+        )
+
+        count = await downloader.persist(mock_db, [boxscore])
+
+        assert count == 1
+        # Should call execute for: 2 team stats + 1 skater + 1 goalie = 4 calls
+        assert mock_db.execute.call_count == 4
+
+    async def test_persist_with_dict_input(self) -> None:
+        """Test persist converts dict to ParsedBoxscore."""
+        downloader = BoxscoreDownloader()
+        mock_db = AsyncMock()
+
+        data = {
+            "game_id": 2024020500,
+            "season_id": 20242025,
+            "game_date": "2024-12-15",
+            "game_type": 2,
+            "game_state": "OFF",
+            "venue_name": "Scotiabank Arena",
+            "is_overtime": False,
+            "is_shootout": False,
+            "home_team": {
+                "team_id": 10,
+                "abbrev": "TOR",
+                "name": "Maple Leafs",
+                "score": 4,
+                "shots_on_goal": 32,
+            },
+            "away_team": {
+                "team_id": 8,
+                "abbrev": "MTL",
+                "name": "Canadiens",
+                "score": 2,
+                "shots_on_goal": 28,
+            },
+            "home_skaters": [],
+            "away_skaters": [],
+            "home_goalies": [],
+            "away_goalies": [],
+        }
+
+        count = await downloader.persist(mock_db, [data])
+
+        assert count == 1
+        # Should call execute for: 2 team stats (no players) = 2 calls
+        assert mock_db.execute.call_count == 2
+
+    async def test_persist_multiple_boxscores(self) -> None:
+        """Test persisting multiple boxscores."""
+        downloader = BoxscoreDownloader()
+        mock_db = AsyncMock()
+
+        boxscores = [
+            ParsedBoxscore(
+                game_id=2024020500,
+                season_id=20242025,
+                game_date="2024-12-15",
+                game_type=2,
+                game_state="OFF",
+                home_team=TeamBoxscore(10, "TOR", "Maple Leafs", 4, 32, True),
+                away_team=TeamBoxscore(8, "MTL", "Canadiens", 2, 28, False),
+                home_skaters=[],
+                away_skaters=[],
+                home_goalies=[],
+                away_goalies=[],
+                venue_name="Scotiabank Arena",
+                is_overtime=False,
+                is_shootout=False,
+            ),
+            ParsedBoxscore(
+                game_id=2024020501,
+                season_id=20242025,
+                game_date="2024-12-15",
+                game_type=2,
+                game_state="OFF",
+                home_team=TeamBoxscore(6, "BOS", "Bruins", 3, 30, True),
+                away_team=TeamBoxscore(12, "CAR", "Hurricanes", 2, 25, False),
+                home_skaters=[],
+                away_skaters=[],
+                home_goalies=[],
+                away_goalies=[],
+                venue_name="TD Garden",
+                is_overtime=False,
+                is_shootout=False,
+            ),
+        ]
+
+        count = await downloader.persist(mock_db, boxscores)
+
+        assert count == 2
+        # 2 boxscores * 2 team stats each = 4 calls
+        assert mock_db.execute.call_count == 4
+
+    async def test_persist_toi_conversion(self) -> None:
+        """Test that TOI is converted to seconds during persist."""
+        downloader = BoxscoreDownloader()
+        mock_db = AsyncMock()
+
+        boxscore = ParsedBoxscore(
+            game_id=2024020500,
+            season_id=20242025,
+            game_date="2024-12-15",
+            game_type=2,
+            game_state="OFF",
+            home_team=TeamBoxscore(10, "TOR", "Maple Leafs", 4, 32, True),
+            away_team=TeamBoxscore(8, "MTL", "Canadiens", 2, 28, False),
+            home_skaters=[
+                SkaterStats(
+                    player_id=8478483,
+                    name="Auston Matthews",
+                    sweater_number=34,
+                    position="C",
+                    goals=2,
+                    assists=1,
+                    points=3,
+                    plus_minus=2,
+                    pim=0,
+                    shots=5,
+                    hits=2,
+                    blocked_shots=0,
+                    giveaways=1,
+                    takeaways=2,
+                    faceoff_pct=55.5,
+                    toi="22:15",  # Should become 1335 seconds
+                    shifts=28,
+                    power_play_goals=1,
+                    shorthanded_goals=0,
+                    team_id=10,
+                ),
+            ],
+            away_skaters=[],
+            home_goalies=[],
+            away_goalies=[],
+            venue_name="Scotiabank Arena",
+            is_overtime=False,
+            is_shootout=False,
+        )
+
+        await downloader.persist(mock_db, [boxscore])
+
+        # Check that the skater insert was called with toi_seconds = 1335
+        skater_call = mock_db.execute.call_args_list[2]  # Third call is skater
+        args = skater_call[0]  # Positional args
+        # args[0] = SQL string, toi_seconds is $17 = args[17]
+        assert args[17] == 1335  # 22:15 = 1335 seconds

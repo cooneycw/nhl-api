@@ -299,7 +299,7 @@ class BoxscoreDownloader(BaseDownloader):
         Raises:
             DownloadError: If the fetch fails
         """
-        path = f"/v1/gamecenter/{game_id}/boxscore"
+        path = f"gamecenter/{game_id}/boxscore"
         logger.debug("%s: Fetching boxscore for game %d", self.source_name, game_id)
 
         try:
