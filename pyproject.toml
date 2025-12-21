@@ -93,6 +93,7 @@ markers = [
     "unit: Unit tests (fast, no external dependencies)",
     "integration: Integration tests (may require external services)",
     "data_validation: Data validation tests (verify data integrity)",
+    "live: Live tests against external services (require network, skipped by default)",
 ]
 
 # Ruff configuration (see issue #7 for full setup)
