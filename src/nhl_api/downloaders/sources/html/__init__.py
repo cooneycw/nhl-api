@@ -20,13 +20,32 @@ from nhl_api.downloaders.sources.html.base_html_downloader import (
     BaseHTMLDownloader,
     HTMLDownloaderConfig,
 )
+from nhl_api.downloaders.sources.html.event_summary import (
+    EventSummaryDownloader,
+    GoalieStats,
+    ParsedEventSummary,
+    PlayerStats,
+    TeamEventSummary,
+)
 from nhl_api.downloaders.sources.html.faceoff_comparison import (
     FaceoffComparisonDownloader,
     FaceoffMatchup,
     FaceoffResult,
     ParsedFaceoffComparison,
     PlayerFaceoffSummary,
+)
+from nhl_api.downloaders.sources.html.faceoff_comparison import (
+    TeamFaceoffSummary as FCTeamFaceoffSummary,
+)
+from nhl_api.downloaders.sources.html.faceoff_summary import (
+    FaceoffStat,
+    FaceoffSummaryDownloader,
+    ParsedFaceoffSummary,
+    PeriodFaceoffs,
+    PlayerFaceoffStats,
+    StrengthFaceoffs,
     TeamFaceoffSummary,
+    ZoneFaceoffs,
 )
 from nhl_api.downloaders.sources.html.game_summary import (
     GameSummaryDownloader,
@@ -36,21 +55,60 @@ from nhl_api.downloaders.sources.html.game_summary import (
     PlayerInfo,
     TeamInfo,
 )
+from nhl_api.downloaders.sources.html.play_by_play import (
+    EventPlayer,
+    ParsedPlayByPlay,
+    PlayByPlayDownloader,
+    PlayByPlayEvent,
+    PlayerOnIce,
+)
+from nhl_api.downloaders.sources.html.shot_summary import (
+    ParsedShotSummary,
+    PeriodSituationStats,
+    PlayerShotSummary,
+    ShotSummaryDownloader,
+    SituationStats,
+    TeamShotSummary,
+)
 
 __all__ = [
     "BaseHTMLDownloader",
+    "EventPlayer",
+    "EventSummaryDownloader",
     "FaceoffComparisonDownloader",
     "FaceoffMatchup",
     "FaceoffResult",
+    "FaceoffStat",
+    "FaceoffSummaryDownloader",
+    "FCTeamFaceoffSummary",
     "GameSummaryDownloader",
+    "GoalieStats",
     "GoalInfo",
     "HTML_DOWNLOADER_CONFIG",
     "HTMLDownloaderConfig",
+    "ParsedEventSummary",
     "ParsedFaceoffComparison",
+    "ParsedFaceoffSummary",
     "ParsedGameSummary",
+    "ParsedPlayByPlay",
+    "ParsedShotSummary",
     "PenaltyInfo",
+    "PeriodFaceoffs",
+    "PeriodSituationStats",
+    "PlayByPlayDownloader",
+    "PlayByPlayEvent",
+    "PlayerFaceoffStats",
     "PlayerFaceoffSummary",
     "PlayerInfo",
+    "PlayerOnIce",
+    "PlayerShotSummary",
+    "PlayerStats",
+    "ShotSummaryDownloader",
+    "SituationStats",
+    "StrengthFaceoffs",
+    "TeamEventSummary",
     "TeamFaceoffSummary",
     "TeamInfo",
+    "TeamShotSummary",
+    "ZoneFaceoffs",
 ]

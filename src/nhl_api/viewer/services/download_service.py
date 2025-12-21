@@ -284,7 +284,7 @@ class DownloadService:
                 )
             elif source_name in ("nhl_boxscore", "nhl_pbp"):
                 await self._download_game_based(
-                    db, batch_id, downloader, season_id, active_download
+                    db, batch_id, downloader, season_id, active_download, source_name
                 )
             elif source_name == "nhl_roster":
                 await self._download_rosters(
@@ -344,6 +344,7 @@ class DownloadService:
         downloader: Any,
         season_id: int,
         active_download: ActiveDownloadTask | None,
+        source_name: str = "",
     ) -> None:
         """Download game-based data (boxscore, play-by-play)."""
         from nhl_api.downloaders.sources.nhl_json import ScheduleDownloader
@@ -354,8 +355,17 @@ class DownloadService:
         async with schedule_dl:
             games = await schedule_dl.get_season_schedule(season_id)
 
-        game_ids = [g.game_id for g in games]
+        # Filter to only completed games - future games return 404 for boxscore/pbp
+        completed_games = [g for g in games if g.game_state in ("OFF", "FINAL")]
+        game_ids = [g.game_id for g in completed_games]
         downloader.set_game_ids(game_ids)
+
+        logger.info(
+            "Downloading %s for %d completed games (filtered from %d total)",
+            source_name,
+            len(game_ids),
+            len(games),
+        )
 
         if active_download:
             active_download.items_total = len(game_ids)
@@ -366,12 +376,16 @@ class DownloadService:
             batch_id,
         )
 
+        # Collect results for persistence
+        successful_results: list[dict[str, Any]] = []
+
         # Download each game
         async for result in downloader.download_season(season_id):
             if active_download and active_download.cancel_requested:
                 raise asyncio.CancelledError()
 
             if result.is_successful:
+                successful_results.append(result.data)
                 if active_download:
                     active_download.items_completed += 1
                 await db.execute(
@@ -385,6 +399,15 @@ class DownloadService:
                     "UPDATE import_batches SET items_failed = items_failed + 1 WHERE batch_id = $1",
                     batch_id,
                 )
+
+        # Persist collected results for boxscore
+        if source_name == "nhl_boxscore" and successful_results:
+            await downloader.persist(db, successful_results)
+            logger.info(
+                "Persisted %d boxscores for season %d",
+                len(successful_results),
+                season_id,
+            )
 
     async def _download_rosters(
         self,

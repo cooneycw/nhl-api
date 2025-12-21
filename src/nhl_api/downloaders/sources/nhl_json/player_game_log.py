@@ -389,7 +389,7 @@ class PlayerGameLogDownloader(BaseDownloader):
         Returns:
             DownloadResult containing the parsed game log
         """
-        path = f"/v1/player/{player_id}/game-log/{season_id}/{game_type}"
+        path = f"player/{player_id}/game-log/{season_id}/{game_type}"
 
         try:
             response = await self._get(path)
