@@ -28,6 +28,7 @@ from nhl_api.downloaders.base.protocol import DownloadError
 if TYPE_CHECKING:
     from nhl_api.downloaders.base.rate_limiter import RateLimiter
     from nhl_api.downloaders.base.retry_handler import RetryHandler
+    from nhl_api.services.db import DatabaseService
     from nhl_api.utils.http_client import HTTPClient
 
 logger = logging.getLogger(__name__)
@@ -655,3 +656,386 @@ class BoxscoreDownloader(BaseDownloader):
             "decision": goalie.decision,
             "team_id": goalie.team_id,
         }
+
+    @staticmethod
+    def _toi_to_seconds(toi: str) -> int:
+        """Convert time on ice from MM:SS format to seconds.
+
+        Args:
+            toi: Time on ice string like "15:30"
+
+        Returns:
+            Total seconds
+        """
+        if not toi or ":" not in toi:
+            return 0
+        try:
+            parts = toi.split(":")
+            minutes = int(parts[0])
+            seconds = int(parts[1]) if len(parts) > 1 else 0
+            return minutes * 60 + seconds
+        except (ValueError, IndexError):
+            return 0
+
+    @staticmethod
+    def _parse_saves_shots(save_shots: str) -> tuple[int, int]:
+        """Parse saves/shots format like '25/27'.
+
+        Args:
+            save_shots: String in 'saves/shots' format
+
+        Returns:
+            Tuple of (saves, shots)
+        """
+        if not save_shots or "/" not in save_shots:
+            return 0, 0
+        try:
+            parts = save_shots.split("/")
+            saves = int(parts[0]) if parts[0].isdigit() else 0
+            shots = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+            return saves, shots
+        except (ValueError, IndexError):
+            return 0, 0
+
+    def _dict_to_boxscore(self, data: dict[str, Any]) -> ParsedBoxscore:
+        """Convert dictionary back to ParsedBoxscore.
+
+        Args:
+            data: Dictionary from DownloadResult.data
+
+        Returns:
+            ParsedBoxscore object
+        """
+        home_team_data = data.get("home_team", {})
+        away_team_data = data.get("away_team", {})
+
+        home_team = TeamBoxscore(
+            team_id=home_team_data.get("team_id", 0),
+            abbrev=home_team_data.get("abbrev", ""),
+            name=home_team_data.get("name", ""),
+            score=home_team_data.get("score", 0),
+            shots_on_goal=home_team_data.get("shots_on_goal", 0),
+            is_home=True,
+        )
+        away_team = TeamBoxscore(
+            team_id=away_team_data.get("team_id", 0),
+            abbrev=away_team_data.get("abbrev", ""),
+            name=away_team_data.get("name", ""),
+            score=away_team_data.get("score", 0),
+            shots_on_goal=away_team_data.get("shots_on_goal", 0),
+            is_home=False,
+        )
+
+        home_skaters = [
+            SkaterStats(
+                player_id=s.get("player_id", 0),
+                name=s.get("name", ""),
+                sweater_number=s.get("sweater_number", 0),
+                position=s.get("position", ""),
+                goals=s.get("goals", 0),
+                assists=s.get("assists", 0),
+                points=s.get("points", 0),
+                plus_minus=s.get("plus_minus", 0),
+                pim=s.get("pim", 0),
+                shots=s.get("shots", 0),
+                hits=s.get("hits", 0),
+                blocked_shots=s.get("blocked_shots", 0),
+                giveaways=s.get("giveaways", 0),
+                takeaways=s.get("takeaways", 0),
+                faceoff_pct=s.get("faceoff_pct", 0.0),
+                toi=s.get("toi", "0:00"),
+                shifts=s.get("shifts", 0),
+                power_play_goals=s.get("power_play_goals", 0),
+                shorthanded_goals=s.get("shorthanded_goals", 0),
+                team_id=s.get("team_id", home_team.team_id),
+            )
+            for s in data.get("home_skaters", [])
+        ]
+
+        away_skaters = [
+            SkaterStats(
+                player_id=s.get("player_id", 0),
+                name=s.get("name", ""),
+                sweater_number=s.get("sweater_number", 0),
+                position=s.get("position", ""),
+                goals=s.get("goals", 0),
+                assists=s.get("assists", 0),
+                points=s.get("points", 0),
+                plus_minus=s.get("plus_minus", 0),
+                pim=s.get("pim", 0),
+                shots=s.get("shots", 0),
+                hits=s.get("hits", 0),
+                blocked_shots=s.get("blocked_shots", 0),
+                giveaways=s.get("giveaways", 0),
+                takeaways=s.get("takeaways", 0),
+                faceoff_pct=s.get("faceoff_pct", 0.0),
+                toi=s.get("toi", "0:00"),
+                shifts=s.get("shifts", 0),
+                power_play_goals=s.get("power_play_goals", 0),
+                shorthanded_goals=s.get("shorthanded_goals", 0),
+                team_id=s.get("team_id", away_team.team_id),
+            )
+            for s in data.get("away_skaters", [])
+        ]
+
+        home_goalies = [
+            GoalieStats(
+                player_id=g.get("player_id", 0),
+                name=g.get("name", ""),
+                sweater_number=g.get("sweater_number", 0),
+                saves=g.get("saves", 0),
+                shots_against=g.get("shots_against", 0),
+                goals_against=g.get("goals_against", 0),
+                save_pct=g.get("save_pct", 0.0),
+                toi=g.get("toi", "0:00"),
+                even_strength_shots_against=g.get("even_strength_shots_against", "0/0"),
+                power_play_shots_against=g.get("power_play_shots_against", "0/0"),
+                shorthanded_shots_against=g.get("shorthanded_shots_against", "0/0"),
+                is_starter=g.get("is_starter", False),
+                decision=g.get("decision"),
+                team_id=g.get("team_id", home_team.team_id),
+            )
+            for g in data.get("home_goalies", [])
+        ]
+
+        away_goalies = [
+            GoalieStats(
+                player_id=g.get("player_id", 0),
+                name=g.get("name", ""),
+                sweater_number=g.get("sweater_number", 0),
+                saves=g.get("saves", 0),
+                shots_against=g.get("shots_against", 0),
+                goals_against=g.get("goals_against", 0),
+                save_pct=g.get("save_pct", 0.0),
+                toi=g.get("toi", "0:00"),
+                even_strength_shots_against=g.get("even_strength_shots_against", "0/0"),
+                power_play_shots_against=g.get("power_play_shots_against", "0/0"),
+                shorthanded_shots_against=g.get("shorthanded_shots_against", "0/0"),
+                is_starter=g.get("is_starter", False),
+                decision=g.get("decision"),
+                team_id=g.get("team_id", away_team.team_id),
+            )
+            for g in data.get("away_goalies", [])
+        ]
+
+        return ParsedBoxscore(
+            game_id=data.get("game_id", 0),
+            season_id=data.get("season_id", 0),
+            game_date=data.get("game_date", ""),
+            game_type=data.get("game_type", 2),
+            game_state=data.get("game_state", ""),
+            home_team=home_team,
+            away_team=away_team,
+            home_skaters=home_skaters,
+            away_skaters=away_skaters,
+            home_goalies=home_goalies,
+            away_goalies=away_goalies,
+            venue_name=data.get("venue_name"),
+            is_overtime=data.get("is_overtime", False),
+            is_shootout=data.get("is_shootout", False),
+        )
+
+    async def persist(
+        self,
+        db: DatabaseService,
+        boxscores: list[ParsedBoxscore] | list[dict[str, Any]],
+    ) -> int:
+        """Persist boxscore data to the database.
+
+        Persists:
+        - Team stats to game_team_stats
+        - Skater stats to game_skater_stats
+        - Goalie stats to game_goalie_stats
+
+        Args:
+            db: Database service instance
+            boxscores: List of ParsedBoxscore objects or dicts to persist
+
+        Returns:
+            Number of boxscores persisted
+        """
+        if not boxscores:
+            return 0
+
+        # Convert dicts to ParsedBoxscore if needed
+        parsed_boxscores: list[ParsedBoxscore] = []
+        for item in boxscores:
+            if isinstance(item, dict):
+                parsed_boxscores.append(self._dict_to_boxscore(item))
+            else:
+                parsed_boxscores.append(item)
+
+        count = 0
+        for boxscore in parsed_boxscores:
+            # Persist team stats for both teams
+            for team, skaters in [
+                (boxscore.home_team, boxscore.home_skaters),
+                (boxscore.away_team, boxscore.away_skaters),
+            ]:
+                # Aggregate stats from players
+                total_hits = sum(s.hits for s in skaters)
+                total_blocked = sum(s.blocked_shots for s in skaters)
+                total_takeaways = sum(s.takeaways for s in skaters)
+                total_giveaways = sum(s.giveaways for s in skaters)
+                total_pim = sum(s.pim for s in skaters)
+                pp_goals = sum(s.power_play_goals for s in skaters)
+
+                await db.execute(
+                    """
+                    INSERT INTO game_team_stats (
+                        game_id, season_id, team_id, is_home,
+                        goals, shots, pim, power_play_goals,
+                        blocked_shots, hits, takeaways, giveaways
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                    ON CONFLICT (game_id, season_id, team_id) DO UPDATE SET
+                        goals = EXCLUDED.goals,
+                        shots = EXCLUDED.shots,
+                        pim = EXCLUDED.pim,
+                        power_play_goals = EXCLUDED.power_play_goals,
+                        blocked_shots = EXCLUDED.blocked_shots,
+                        hits = EXCLUDED.hits,
+                        takeaways = EXCLUDED.takeaways,
+                        giveaways = EXCLUDED.giveaways,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    boxscore.game_id,
+                    boxscore.season_id,
+                    team.team_id,
+                    team.is_home,
+                    team.score,
+                    team.shots_on_goal,
+                    total_pim,
+                    pp_goals,
+                    total_blocked,
+                    total_hits,
+                    total_takeaways,
+                    total_giveaways,
+                )
+
+            # Persist skater stats
+            all_skaters = boxscore.home_skaters + boxscore.away_skaters
+            for skater in all_skaters:
+                toi_seconds = self._toi_to_seconds(skater.toi)
+                await db.execute(
+                    """
+                    INSERT INTO game_skater_stats (
+                        game_id, season_id, player_id, team_id, position,
+                        goals, assists, points, plus_minus, pim,
+                        shots, hits, blocked_shots, giveaways, takeaways,
+                        faceoff_pct, toi_seconds, shifts,
+                        power_play_goals, shorthanded_goals
+                    ) VALUES (
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                        $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
+                    )
+                    ON CONFLICT (game_id, season_id, player_id) DO UPDATE SET
+                        goals = EXCLUDED.goals,
+                        assists = EXCLUDED.assists,
+                        points = EXCLUDED.points,
+                        plus_minus = EXCLUDED.plus_minus,
+                        pim = EXCLUDED.pim,
+                        shots = EXCLUDED.shots,
+                        hits = EXCLUDED.hits,
+                        blocked_shots = EXCLUDED.blocked_shots,
+                        giveaways = EXCLUDED.giveaways,
+                        takeaways = EXCLUDED.takeaways,
+                        faceoff_pct = EXCLUDED.faceoff_pct,
+                        toi_seconds = EXCLUDED.toi_seconds,
+                        shifts = EXCLUDED.shifts,
+                        power_play_goals = EXCLUDED.power_play_goals,
+                        shorthanded_goals = EXCLUDED.shorthanded_goals,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    boxscore.game_id,
+                    boxscore.season_id,
+                    skater.player_id,
+                    skater.team_id,
+                    skater.position,
+                    skater.goals,
+                    skater.assists,
+                    skater.points,
+                    skater.plus_minus,
+                    skater.pim,
+                    skater.shots,
+                    skater.hits,
+                    skater.blocked_shots,
+                    skater.giveaways,
+                    skater.takeaways,
+                    skater.faceoff_pct if skater.faceoff_pct > 0 else None,
+                    toi_seconds,
+                    skater.shifts,
+                    skater.power_play_goals,
+                    skater.shorthanded_goals,
+                )
+
+            # Persist goalie stats
+            all_goalies = boxscore.home_goalies + boxscore.away_goalies
+            for goalie in all_goalies:
+                toi_seconds = self._toi_to_seconds(goalie.toi)
+                es_saves, es_shots = self._parse_saves_shots(
+                    goalie.even_strength_shots_against
+                )
+                pp_saves, pp_shots = self._parse_saves_shots(
+                    goalie.power_play_shots_against
+                )
+                sh_saves, sh_shots = self._parse_saves_shots(
+                    goalie.shorthanded_shots_against
+                )
+
+                await db.execute(
+                    """
+                    INSERT INTO game_goalie_stats (
+                        game_id, season_id, player_id, team_id,
+                        saves, shots_against, goals_against, save_pct,
+                        toi_seconds, even_strength_saves, even_strength_shots,
+                        power_play_saves, power_play_shots,
+                        shorthanded_saves, shorthanded_shots,
+                        is_starter, decision
+                    ) VALUES (
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                        $11, $12, $13, $14, $15, $16, $17
+                    )
+                    ON CONFLICT (game_id, season_id, player_id) DO UPDATE SET
+                        saves = EXCLUDED.saves,
+                        shots_against = EXCLUDED.shots_against,
+                        goals_against = EXCLUDED.goals_against,
+                        save_pct = EXCLUDED.save_pct,
+                        toi_seconds = EXCLUDED.toi_seconds,
+                        even_strength_saves = EXCLUDED.even_strength_saves,
+                        even_strength_shots = EXCLUDED.even_strength_shots,
+                        power_play_saves = EXCLUDED.power_play_saves,
+                        power_play_shots = EXCLUDED.power_play_shots,
+                        shorthanded_saves = EXCLUDED.shorthanded_saves,
+                        shorthanded_shots = EXCLUDED.shorthanded_shots,
+                        is_starter = EXCLUDED.is_starter,
+                        decision = EXCLUDED.decision,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    boxscore.game_id,
+                    boxscore.season_id,
+                    goalie.player_id,
+                    goalie.team_id,
+                    goalie.saves,
+                    goalie.shots_against,
+                    goalie.goals_against,
+                    goalie.save_pct if goalie.save_pct > 0 else None,
+                    toi_seconds,
+                    es_saves,
+                    es_shots,
+                    pp_saves,
+                    pp_shots,
+                    sh_saves,
+                    sh_shots,
+                    goalie.is_starter,
+                    goalie.decision,
+                )
+
+            count += 1
+
+        logger.info(
+            "Persisted %d boxscores (%d skater stats, %d goalie stats)",
+            count,
+            sum(len(b.home_skaters) + len(b.away_skaters) for b in parsed_boxscores),
+            sum(len(b.home_goalies) + len(b.away_goalies) for b in parsed_boxscores),
+        )
+        return count

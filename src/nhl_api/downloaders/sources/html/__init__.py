@@ -20,6 +20,13 @@ from nhl_api.downloaders.sources.html.base_html_downloader import (
     BaseHTMLDownloader,
     HTMLDownloaderConfig,
 )
+from nhl_api.downloaders.sources.html.event_summary import (
+    EventSummaryDownloader,
+    GoalieStats,
+    ParsedEventSummary,
+    PlayerStats,
+    TeamEventSummary,
+)
 from nhl_api.downloaders.sources.html.faceoff_summary import (
     FaceoffStat,
     FaceoffSummaryDownloader,
@@ -41,19 +48,24 @@ from nhl_api.downloaders.sources.html.game_summary import (
 
 __all__ = [
     "BaseHTMLDownloader",
+    "EventSummaryDownloader",
     "FaceoffStat",
     "FaceoffSummaryDownloader",
     "GameSummaryDownloader",
+    "GoalieStats",
     "GoalInfo",
     "HTML_DOWNLOADER_CONFIG",
     "HTMLDownloaderConfig",
+    "ParsedEventSummary",
     "ParsedFaceoffSummary",
     "ParsedGameSummary",
     "PenaltyInfo",
     "PeriodFaceoffs",
     "PlayerFaceoffStats",
     "PlayerInfo",
+    "PlayerStats",
     "StrengthFaceoffs",
+    "TeamEventSummary",
     "TeamFaceoffSummary",
     "TeamInfo",
     "ZoneFaceoffs",
