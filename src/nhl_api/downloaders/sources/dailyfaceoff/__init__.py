@@ -9,6 +9,7 @@ Available downloaders:
 - PenaltyKillDownloader: Penalty kill unit configurations (PK1, PK2)
 - PowerPlayDownloader: Download power play unit configurations (PP1, PP2)
 - InjuryDownloader: Injury tracking (team and league-wide)
+- StartingGoaliesDownloader: Tonight's confirmed/expected starting goalies
 
 Example usage:
     from nhl_api.downloaders.sources.dailyfaceoff import (
@@ -16,6 +17,7 @@ Example usage:
         PenaltyKillDownloader,
         PowerPlayDownloader,
         InjuryDownloader,
+        StartingGoaliesDownloader,
         DailyFaceoffConfig,
     )
 
@@ -33,6 +35,9 @@ Example usage:
     async with InjuryDownloader(config) as downloader:
         result = await downloader.download_team(10)  # Toronto team injuries
         league = await downloader.download_league_injuries()  # All injuries
+
+    async with StartingGoaliesDownloader(config) as downloader:
+        result = await downloader.download_tonight()  # Tonight's starters
 """
 
 from nhl_api.downloaders.sources.dailyfaceoff.base_dailyfaceoff_downloader import (
@@ -65,6 +70,12 @@ from nhl_api.downloaders.sources.dailyfaceoff.power_play import (
     PowerPlayPlayer,
     PowerPlayUnit,
     TeamPowerPlay,
+)
+from nhl_api.downloaders.sources.dailyfaceoff.starting_goalies import (
+    ConfirmationStatus,
+    GoalieStart,
+    StartingGoaliesDownloader,
+    TonightsGoalies,
 )
 from nhl_api.downloaders.sources.dailyfaceoff.team_mapping import (
     TEAM_ABBREVIATIONS,
@@ -100,6 +111,11 @@ __all__ = [
     "PowerPlayPlayer",
     "PowerPlayUnit",
     "TeamPowerPlay",
+    # Starting Goalies
+    "StartingGoaliesDownloader",
+    "ConfirmationStatus",
+    "GoalieStart",
+    "TonightsGoalies",
     # Team Mapping
     "TEAM_SLUGS",
     "TEAM_ABBREVIATIONS",
