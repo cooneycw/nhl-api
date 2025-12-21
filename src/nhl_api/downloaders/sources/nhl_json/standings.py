@@ -21,6 +21,8 @@ from nhl_api.downloaders.base.protocol import DownloadError
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+    from nhl_api.services.db import DatabaseService
+
 logger = logging.getLogger(__name__)
 
 # NHL JSON API base URL
@@ -448,6 +450,137 @@ class StandingsDownloader(BaseDownloader):
         logger.info("Retrieved %d standings snapshots", len(snapshots))
 
         return snapshots
+
+    async def persist(
+        self,
+        db: DatabaseService,
+        standings: ParsedStandings,
+    ) -> int:
+        """Persist standings snapshot to the database.
+
+        Uses upsert (INSERT ... ON CONFLICT) to handle re-downloads gracefully.
+        Updates all fields for standings that already exist for the same date.
+
+        Args:
+            db: Database service instance
+            standings: ParsedStandings object to persist
+
+        Returns:
+            Number of team standings upserted
+        """
+        if not standings.standings:
+            return 0
+
+        count = 0
+        for team in standings.standings:
+            # Format record splits as strings (e.g., "15-5-2")
+            home_record = _format_record_split(team.home_record)
+            road_record = _format_record_split(team.road_record)
+            last_10_record = _format_record_split(team.last_10_record)
+
+            # Extract streak info
+            streak_code = team.streak.code if team.streak else None
+            streak_count = team.streak.count if team.streak else None
+
+            await db.execute(
+                """
+                INSERT INTO standings_snapshots (
+                    team_abbrev, season_id, snapshot_date,
+                    conference_abbrev, conference_name, division_abbrev, division_name,
+                    games_played, wins, losses, ot_losses, points, point_pctg,
+                    goals_for, goals_against, goal_differential,
+                    regulation_wins, regulation_plus_ot_wins, shootout_wins, shootout_losses,
+                    league_sequence, conference_sequence, division_sequence, wildcard_sequence,
+                    streak_code, streak_count,
+                    home_record, road_record, last_10_record,
+                    clinch_indicator
+                ) VALUES (
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                    $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+                    $21, $22, $23, $24, $25, $26, $27, $28, $29, $30
+                )
+                ON CONFLICT (team_abbrev, season_id, snapshot_date) DO UPDATE SET
+                    conference_abbrev = EXCLUDED.conference_abbrev,
+                    conference_name = EXCLUDED.conference_name,
+                    division_abbrev = EXCLUDED.division_abbrev,
+                    division_name = EXCLUDED.division_name,
+                    games_played = EXCLUDED.games_played,
+                    wins = EXCLUDED.wins,
+                    losses = EXCLUDED.losses,
+                    ot_losses = EXCLUDED.ot_losses,
+                    points = EXCLUDED.points,
+                    point_pctg = EXCLUDED.point_pctg,
+                    goals_for = EXCLUDED.goals_for,
+                    goals_against = EXCLUDED.goals_against,
+                    goal_differential = EXCLUDED.goal_differential,
+                    regulation_wins = EXCLUDED.regulation_wins,
+                    regulation_plus_ot_wins = EXCLUDED.regulation_plus_ot_wins,
+                    shootout_wins = EXCLUDED.shootout_wins,
+                    shootout_losses = EXCLUDED.shootout_losses,
+                    league_sequence = EXCLUDED.league_sequence,
+                    conference_sequence = EXCLUDED.conference_sequence,
+                    division_sequence = EXCLUDED.division_sequence,
+                    wildcard_sequence = EXCLUDED.wildcard_sequence,
+                    streak_code = EXCLUDED.streak_code,
+                    streak_count = EXCLUDED.streak_count,
+                    home_record = EXCLUDED.home_record,
+                    road_record = EXCLUDED.road_record,
+                    last_10_record = EXCLUDED.last_10_record,
+                    clinch_indicator = EXCLUDED.clinch_indicator
+                """,
+                team.team_abbrev,
+                standings.season_id,
+                standings.standings_date,
+                team.conference_abbrev,
+                team.conference_name,
+                team.division_abbrev,
+                team.division_name,
+                team.games_played,
+                team.wins,
+                team.losses,
+                team.ot_losses,
+                team.points,
+                team.point_pctg,
+                team.goals_for,
+                team.goals_against,
+                team.goal_differential,
+                team.regulation_wins,
+                team.regulation_plus_ot_wins,
+                team.shootout_wins,
+                team.shootout_losses,
+                team.league_sequence,
+                team.conference_sequence,
+                team.division_sequence,
+                team.wildcard_sequence,
+                streak_code,
+                streak_count,
+                home_record,
+                road_record,
+                last_10_record,
+                team.clinch_indicator,
+            )
+            count += 1
+
+        logger.info(
+            "Persisted standings for %d teams on %s to database",
+            count,
+            standings.standings_date,
+        )
+        return count
+
+
+def _format_record_split(record: RecordSplit | None) -> str | None:
+    """Format a record split as a W-L-OTL string.
+
+    Args:
+        record: RecordSplit object or None
+
+    Returns:
+        Formatted string like "15-5-2" or None
+    """
+    if record is None:
+        return None
+    return f"{record.wins}-{record.losses}-{record.ot_losses}"
 
 
 def create_standings_downloader(

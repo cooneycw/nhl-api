@@ -15,6 +15,7 @@ from nhl_api.downloaders.sources.nhl_json.standings import (
     RecordSplit,
     StandingsDownloader,
     StreakInfo,
+    _format_record_split,
     _parse_record_split,
     _parse_standings,
     _parse_streak,
@@ -589,3 +590,240 @@ class TestCreateStandingsDownloader:
         downloader = create_standings_downloader()
 
         assert downloader.config.health_check_url == "standings/now"
+
+
+@pytest.mark.unit
+class TestFormatRecordSplit:
+    """Tests for _format_record_split helper function."""
+
+    def test_format_valid_record(self) -> None:
+        """Test formatting a valid record split."""
+        record = RecordSplit(
+            wins=15, losses=5, ot_losses=2, points=32, goals_for=80, goals_against=60
+        )
+        result = _format_record_split(record)
+        assert result == "15-5-2"
+
+    def test_format_none_returns_none(self) -> None:
+        """Test that None returns None."""
+        assert _format_record_split(None) is None
+
+    def test_format_zero_record(self) -> None:
+        """Test formatting a zero record."""
+        record = RecordSplit(
+            wins=0, losses=0, ot_losses=0, points=0, goals_for=0, goals_against=0
+        )
+        result = _format_record_split(record)
+        assert result == "0-0-0"
+
+
+@pytest.mark.unit
+class TestStandingsDownloaderPersist:
+    """Tests for StandingsDownloader.persist() method."""
+
+    @pytest.fixture
+    def mock_db(self) -> AsyncMock:
+        """Create a mock database service."""
+        db = AsyncMock()
+        db.execute = AsyncMock()
+        return db
+
+    @pytest.fixture
+    def mock_http_client(self) -> MagicMock:
+        """Create a mock HTTP client."""
+        client = MagicMock()
+        client.get = AsyncMock()
+        client.close = AsyncMock()
+        return client
+
+    @pytest.fixture
+    def mock_rate_limiter(self) -> MagicMock:
+        """Create a mock rate limiter."""
+        limiter = MagicMock()
+        limiter.wait = AsyncMock()
+        return limiter
+
+    @pytest.fixture
+    def config(self) -> DownloaderConfig:
+        """Create a test configuration."""
+        return DownloaderConfig(
+            base_url="https://api-web.nhle.com/v1",
+            requests_per_second=10.0,
+        )
+
+    @pytest.fixture
+    def downloader(
+        self,
+        config: DownloaderConfig,
+        mock_http_client: MagicMock,
+        mock_rate_limiter: MagicMock,
+    ) -> StandingsDownloader:
+        """Create a StandingsDownloader with mock HTTP client."""
+        dl = StandingsDownloader(
+            config,
+            http_client=mock_http_client,
+            rate_limiter=mock_rate_limiter,
+        )
+        dl._owns_http_client = False
+        return dl
+
+    @pytest.fixture
+    def sample_standings(self) -> ParsedStandings:
+        """Create sample standings for testing."""
+        return _parse_standings(SAMPLE_STANDINGS_RESPONSE, date(2024, 12, 20))
+
+    @pytest.mark.asyncio
+    async def test_persist_empty_standings(
+        self,
+        downloader: StandingsDownloader,
+        mock_db: AsyncMock,
+    ) -> None:
+        """Test persisting empty standings returns 0."""
+        empty_standings = ParsedStandings(
+            standings_date=date(2024, 12, 20),
+            season_id=20242025,
+            standings=(),
+        )
+        result = await downloader.persist(mock_db, empty_standings)
+        assert result == 0
+        mock_db.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_persist_single_team(
+        self,
+        downloader: StandingsDownloader,
+        mock_db: AsyncMock,
+        sample_standings: ParsedStandings,
+    ) -> None:
+        """Test persisting standings with one team."""
+        result = await downloader.persist(mock_db, sample_standings)
+
+        assert result == 1
+        mock_db.execute.assert_called_once()
+
+        # Verify the SQL call has correct team abbreviation
+        call_args = mock_db.execute.call_args
+        assert call_args[0][1] == "BOS"  # team_abbrev
+        assert call_args[0][2] == 20242025  # season_id
+        assert call_args[0][3] == date(2024, 12, 20)  # snapshot_date
+
+    @pytest.mark.asyncio
+    async def test_persist_multiple_teams(
+        self,
+        downloader: StandingsDownloader,
+        mock_db: AsyncMock,
+    ) -> None:
+        """Test persisting standings with multiple teams."""
+        # Create standings with 2 teams
+        team2_data = SAMPLE_TEAM_STANDINGS.copy()
+        team2_data["teamAbbrev"] = {"default": "NYR"}
+        team2_data["teamName"] = {"default": "New York Rangers"}
+
+        multi_team_response = {"standings": [SAMPLE_TEAM_STANDINGS, team2_data]}
+        standings = _parse_standings(multi_team_response, date(2024, 12, 20))
+
+        result = await downloader.persist(mock_db, standings)
+
+        assert result == 2
+        assert mock_db.execute.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_persist_record_splits_formatted(
+        self,
+        downloader: StandingsDownloader,
+        mock_db: AsyncMock,
+        sample_standings: ParsedStandings,
+    ) -> None:
+        """Test that record splits are formatted correctly."""
+        await downloader.persist(mock_db, sample_standings)
+
+        call_args = mock_db.execute.call_args
+        # home_record is parameter 27, road_record is 28, last_10 is 29
+        assert call_args[0][27] == "12-4-1"  # home_record
+        assert call_args[0][28] == "10-6-2"  # road_record
+        assert call_args[0][29] == "7-2-1"  # last_10_record
+
+    @pytest.mark.asyncio
+    async def test_persist_streak_info(
+        self,
+        downloader: StandingsDownloader,
+        mock_db: AsyncMock,
+        sample_standings: ParsedStandings,
+    ) -> None:
+        """Test that streak info is extracted correctly."""
+        await downloader.persist(mock_db, sample_standings)
+
+        call_args = mock_db.execute.call_args
+        # streak_code is parameter 25, streak_count is 26
+        assert call_args[0][25] == "W"  # streak_code
+        assert call_args[0][26] == 3  # streak_count
+
+    @pytest.mark.asyncio
+    async def test_persist_no_streak(
+        self,
+        downloader: StandingsDownloader,
+        mock_db: AsyncMock,
+    ) -> None:
+        """Test persisting standings with no streak info."""
+        # Create standings without streak
+        no_streak_data = SAMPLE_TEAM_STANDINGS.copy()
+        del no_streak_data["streakCode"]
+        del no_streak_data["streakCount"]
+
+        standings = _parse_standings(
+            {"standings": [no_streak_data]}, date(2024, 12, 20)
+        )
+        await downloader.persist(mock_db, standings)
+
+        call_args = mock_db.execute.call_args
+        assert call_args[0][25] is None  # streak_code
+        assert call_args[0][26] is None  # streak_count
+
+    @pytest.mark.asyncio
+    async def test_persist_no_record_splits(
+        self,
+        downloader: StandingsDownloader,
+        mock_db: AsyncMock,
+    ) -> None:
+        """Test persisting standings without record splits."""
+        # Create standings without record splits
+        no_splits_data = SAMPLE_TEAM_STANDINGS.copy()
+        del no_splits_data["homeRecord"]
+        del no_splits_data["roadRecord"]
+        del no_splits_data["l10Record"]
+
+        standings = _parse_standings(
+            {"standings": [no_splits_data]}, date(2024, 12, 20)
+        )
+        await downloader.persist(mock_db, standings)
+
+        call_args = mock_db.execute.call_args
+        assert call_args[0][27] is None  # home_record
+        assert call_args[0][28] is None  # road_record
+        assert call_args[0][29] is None  # last_10_record
+
+    @pytest.mark.asyncio
+    async def test_persist_all_fields_mapped(
+        self,
+        downloader: StandingsDownloader,
+        mock_db: AsyncMock,
+        sample_standings: ParsedStandings,
+    ) -> None:
+        """Test that all key fields are persisted correctly."""
+        await downloader.persist(mock_db, sample_standings)
+
+        call_args = mock_db.execute.call_args
+        # Verify key fields
+        assert call_args[0][1] == "BOS"  # team_abbrev
+        assert call_args[0][4] == "E"  # conference_abbrev
+        assert call_args[0][5] == "Eastern"  # conference_name
+        assert call_args[0][6] == "A"  # division_abbrev
+        assert call_args[0][7] == "Atlantic"  # division_name
+        assert call_args[0][8] == 35  # games_played
+        assert call_args[0][9] == 22  # wins
+        assert call_args[0][10] == 10  # losses
+        assert call_args[0][11] == 3  # ot_losses
+        assert call_args[0][12] == 47  # points
+        assert call_args[0][14] == 105  # goals_for
+        assert call_args[0][15] == 78  # goals_against
+        assert call_args[0][16] == 27  # goal_differential
