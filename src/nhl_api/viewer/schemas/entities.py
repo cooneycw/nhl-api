@@ -220,3 +220,227 @@ class GameListResponse(BaseModel):
 
     games: list[GameSummary]
     pagination: PaginationMeta
+
+
+# =============================================================================
+# Game Events (Play-by-Play)
+# =============================================================================
+
+
+class PlayByPlayEvent(BaseModel):
+    """Individual play-by-play event."""
+
+    event_idx: int
+    event_type: str
+    period: int
+    period_type: str | None = None
+    time_in_period: str | None = None
+    time_remaining: str | None = None
+    description: str | None = None
+    player1_id: int | None = None
+    player1_name: str | None = None
+    player1_role: str | None = None
+    player2_id: int | None = None
+    player2_name: str | None = None
+    player2_role: str | None = None
+    player3_id: int | None = None
+    player3_name: str | None = None
+    player3_role: str | None = None
+    team_id: int | None = None
+    team_abbr: str | None = None
+    home_score: int = 0
+    away_score: int = 0
+    shot_type: str | None = None
+    zone: str | None = None
+    x_coord: float | None = None
+    y_coord: float | None = None
+
+
+class GameEventsResponse(BaseModel):
+    """Response for game events endpoint."""
+
+    game_id: int
+    events: list[PlayByPlayEvent]
+    total_events: int
+
+
+# =============================================================================
+# Game Player Statistics
+# =============================================================================
+
+
+class SkaterGameStats(BaseModel):
+    """Individual skater statistics for a game."""
+
+    player_id: int
+    player_name: str
+    team_id: int
+    team_abbr: str
+    position: str | None = None
+    goals: int = 0
+    assists: int = 0
+    points: int = 0
+    plus_minus: int = 0
+    pim: int = 0
+    shots: int = 0
+    hits: int = 0
+    blocked_shots: int = 0
+    giveaways: int = 0
+    takeaways: int = 0
+    faceoff_pct: float | None = None
+    toi_seconds: int = 0
+    toi_formatted: str = "00:00"
+    shifts: int = 0
+    power_play_goals: int = 0
+    shorthanded_goals: int = 0
+
+
+class GoalieGameStats(BaseModel):
+    """Individual goalie statistics for a game."""
+
+    player_id: int
+    player_name: str
+    team_id: int
+    team_abbr: str
+    saves: int = 0
+    shots_against: int = 0
+    goals_against: int = 0
+    save_pct: float | None = None
+    toi_seconds: int = 0
+    toi_formatted: str = "00:00"
+    even_strength_saves: int = 0
+    even_strength_shots: int = 0
+    power_play_saves: int = 0
+    power_play_shots: int = 0
+    shorthanded_saves: int = 0
+    shorthanded_shots: int = 0
+    is_starter: bool = False
+    decision: str | None = None
+
+
+class GamePlayerStats(BaseModel):
+    """All player statistics for a game."""
+
+    game_id: int
+    home_team_id: int
+    home_team_abbr: str
+    away_team_id: int
+    away_team_abbr: str
+    home_skaters: list[SkaterGameStats]
+    away_skaters: list[SkaterGameStats]
+    home_goalies: list[GoalieGameStats]
+    away_goalies: list[GoalieGameStats]
+
+
+# =============================================================================
+# Game Shifts (TOI Detail)
+# =============================================================================
+
+
+class ShiftDetail(BaseModel):
+    """Individual shift record."""
+
+    shift_number: int
+    period: int
+    start_time: str
+    end_time: str
+    duration_seconds: int
+    is_goal_event: bool = False
+    event_description: str | None = None
+
+
+class PlayerShiftSummary(BaseModel):
+    """Player shift summary with TOI breakdown."""
+
+    player_id: int
+    player_name: str
+    sweater_number: int | None = None
+    position: str | None = None
+    team_id: int
+    team_abbr: str
+
+    # Total TOI
+    total_toi_seconds: int = 0
+    total_toi_display: str = "00:00"
+    total_shifts: int = 0
+    avg_shift_seconds: float = 0.0
+
+    # By period (period number -> seconds)
+    period_1_toi: int = 0
+    period_2_toi: int = 0
+    period_3_toi: int = 0
+    ot_toi: int = 0
+
+
+class GameShiftsResponse(BaseModel):
+    """All shift data for a game."""
+
+    game_id: int
+    home_team_id: int
+    home_team_abbr: str
+    away_team_id: int
+    away_team_abbr: str
+    home_players: list[PlayerShiftSummary]
+    away_players: list[PlayerShiftSummary]
+
+
+# =============================================================================
+# Player Game Log
+# =============================================================================
+
+
+class PlayerGameEntry(BaseModel):
+    """Single game entry in a player's game log (clickable game)."""
+
+    game_id: int
+    game_date: date
+    season_id: int
+    opponent_team_id: int
+    opponent_abbr: str
+    opponent_name: str
+    is_home: bool
+    result: str | None = None  # W, L, OTL
+
+    # Scores
+    player_team_score: int | None = None
+    opponent_score: int | None = None
+
+    # Stats (for skaters)
+    goals: int | None = None
+    assists: int | None = None
+    points: int | None = None
+    plus_minus: int | None = None
+    pim: int | None = None
+    shots: int | None = None
+    toi_display: str | None = None
+
+    # Stats (for goalies)
+    saves: int | None = None
+    shots_against: int | None = None
+    save_pct: float | None = None
+    decision: str | None = None
+
+
+class PlayerGameLogResponse(BaseModel):
+    """Player's game log with recent games."""
+
+    player_id: int
+    player_name: str
+    position_type: str | None = None
+    games: list[PlayerGameEntry]
+    pagination: PaginationMeta
+
+
+# =============================================================================
+# Team Games (Recent Schedule)
+# =============================================================================
+
+
+class TeamRecentGamesResponse(BaseModel):
+    """Team's recent and upcoming games."""
+
+    team_id: int
+    team_name: str
+    team_abbr: str
+    games: list[GameSummary]
+    pagination: PaginationMeta
