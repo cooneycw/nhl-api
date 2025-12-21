@@ -37,6 +37,7 @@ from nhl_api.downloaders.base.protocol import (
 if TYPE_CHECKING:
     from nhl_api.downloaders.base.rate_limiter import RateLimiter
     from nhl_api.downloaders.base.retry_handler import RetryHandler
+    from nhl_api.services.db import DatabaseService
     from nhl_api.utils.http_client import HTTPClient
 
 logger = logging.getLogger(__name__)
@@ -248,6 +249,41 @@ class ParsedPlayerGameLog:
         return result
 
 
+def _toi_to_seconds(toi: str) -> int:
+    """Convert time on ice string (MM:SS) to seconds.
+
+    Args:
+        toi: Time on ice in MM:SS format
+
+    Returns:
+        Time on ice in seconds
+    """
+    if not toi:
+        return 0
+    try:
+        parts = toi.split(":")
+        if len(parts) == 2:
+            minutes, seconds = int(parts[0]), int(parts[1])
+            return minutes * 60 + seconds
+        return 0
+    except (ValueError, AttributeError):
+        return 0
+
+
+def _game_type_to_string(game_type: int) -> str:
+    """Convert numeric game type to string.
+
+    Args:
+        game_type: Numeric game type (2 = regular, 3 = playoffs)
+
+    Returns:
+        'R' for regular season, 'P' for playoffs
+    """
+    if game_type == PLAYOFFS:
+        return "P"
+    return "R"
+
+
 def _parse_date(date_str: str | None) -> date | None:
     """Parse a date string to date object.
 
@@ -430,6 +466,186 @@ class PlayerGameLogDownloader(BaseDownloader):
         for player_id, season_id, game_type in self._players:
             result = await self.download_player_season(player_id, season_id, game_type)
             yield result
+
+    async def persist(
+        self,
+        db: DatabaseService,
+        game_logs: list[dict[str, Any]],
+    ) -> int:
+        """Persist player game logs to database.
+
+        Args:
+            db: Database service
+            game_logs: List of game log dictionaries from download results
+
+        Returns:
+            Number of rows upserted
+        """
+        count = 0
+
+        for log_data in game_logs:
+            try:
+                player_id = log_data.get("player_id")
+                season_id = log_data.get("season_id")
+                game_type = log_data.get("game_type", REGULAR_SEASON)
+                is_goalie = log_data.get("is_goalie", False)
+                games = log_data.get("games", [])
+
+                game_type_str = _game_type_to_string(game_type)
+
+                for game in games:
+                    try:
+                        game_id = game.get("game_id")
+                        if not game_id or not player_id:
+                            continue
+
+                        # Parse game date
+                        game_date_str = game.get("game_date")
+                        game_date = None
+                        if game_date_str:
+                            try:
+                                game_date = date.fromisoformat(game_date_str)
+                            except ValueError:
+                                pass
+
+                        # Convert TOI to seconds
+                        toi_seconds = _toi_to_seconds(game.get("toi", "00:00"))
+
+                        if is_goalie:
+                            # Goalie game log
+                            await db.execute(
+                                """
+                                INSERT INTO player_game_logs (
+                                    player_id, game_id, season_id, game_type,
+                                    team_abbrev, opponent_abbrev, home_road_flag, game_date,
+                                    goals, assists, pim, toi_seconds,
+                                    games_started, decision, shots_against, goals_against,
+                                    save_pct, shutouts, is_goalie, updated_at
+                                ) VALUES (
+                                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                                    $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW()
+                                )
+                                ON CONFLICT (player_id, game_id) DO UPDATE SET
+                                    season_id = EXCLUDED.season_id,
+                                    game_type = EXCLUDED.game_type,
+                                    team_abbrev = EXCLUDED.team_abbrev,
+                                    opponent_abbrev = EXCLUDED.opponent_abbrev,
+                                    home_road_flag = EXCLUDED.home_road_flag,
+                                    game_date = EXCLUDED.game_date,
+                                    goals = EXCLUDED.goals,
+                                    assists = EXCLUDED.assists,
+                                    pim = EXCLUDED.pim,
+                                    toi_seconds = EXCLUDED.toi_seconds,
+                                    games_started = EXCLUDED.games_started,
+                                    decision = EXCLUDED.decision,
+                                    shots_against = EXCLUDED.shots_against,
+                                    goals_against = EXCLUDED.goals_against,
+                                    save_pct = EXCLUDED.save_pct,
+                                    shutouts = EXCLUDED.shutouts,
+                                    is_goalie = EXCLUDED.is_goalie,
+                                    updated_at = NOW()
+                                """,
+                                player_id,
+                                game_id,
+                                season_id,
+                                game_type_str,
+                                game.get("team_abbrev"),
+                                game.get("opponent_abbrev"),
+                                game.get("home_road_flag"),
+                                game_date,
+                                game.get("goals", 0),
+                                game.get("assists", 0),
+                                game.get("pim", 0),
+                                toi_seconds,
+                                game.get("games_started", 0),
+                                game.get("decision"),
+                                game.get("shots_against", 0),
+                                game.get("goals_against", 0),
+                                game.get("save_pct", 0.0),
+                                game.get("shutouts", 0),
+                                True,
+                            )
+                        else:
+                            # Skater game log
+                            await db.execute(
+                                """
+                                INSERT INTO player_game_logs (
+                                    player_id, game_id, season_id, game_type,
+                                    team_abbrev, opponent_abbrev, home_road_flag, game_date,
+                                    goals, assists, pim, toi_seconds,
+                                    points, plus_minus, shots, shifts,
+                                    power_play_goals, power_play_points,
+                                    shorthanded_goals, shorthanded_points,
+                                    game_winning_goals, ot_goals, is_goalie, updated_at
+                                ) VALUES (
+                                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                                    $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+                                    $21, $22, $23, NOW()
+                                )
+                                ON CONFLICT (player_id, game_id) DO UPDATE SET
+                                    season_id = EXCLUDED.season_id,
+                                    game_type = EXCLUDED.game_type,
+                                    team_abbrev = EXCLUDED.team_abbrev,
+                                    opponent_abbrev = EXCLUDED.opponent_abbrev,
+                                    home_road_flag = EXCLUDED.home_road_flag,
+                                    game_date = EXCLUDED.game_date,
+                                    goals = EXCLUDED.goals,
+                                    assists = EXCLUDED.assists,
+                                    pim = EXCLUDED.pim,
+                                    toi_seconds = EXCLUDED.toi_seconds,
+                                    points = EXCLUDED.points,
+                                    plus_minus = EXCLUDED.plus_minus,
+                                    shots = EXCLUDED.shots,
+                                    shifts = EXCLUDED.shifts,
+                                    power_play_goals = EXCLUDED.power_play_goals,
+                                    power_play_points = EXCLUDED.power_play_points,
+                                    shorthanded_goals = EXCLUDED.shorthanded_goals,
+                                    shorthanded_points = EXCLUDED.shorthanded_points,
+                                    game_winning_goals = EXCLUDED.game_winning_goals,
+                                    ot_goals = EXCLUDED.ot_goals,
+                                    is_goalie = EXCLUDED.is_goalie,
+                                    updated_at = NOW()
+                                """,
+                                player_id,
+                                game_id,
+                                season_id,
+                                game_type_str,
+                                game.get("team_abbrev"),
+                                game.get("opponent_abbrev"),
+                                game.get("home_road_flag"),
+                                game_date,
+                                game.get("goals", 0),
+                                game.get("assists", 0),
+                                game.get("pim", 0),
+                                toi_seconds,
+                                game.get("points", 0),
+                                game.get("plus_minus", 0),
+                                game.get("shots", 0),
+                                game.get("shifts", 0),
+                                game.get("power_play_goals", 0),
+                                game.get("power_play_points", 0),
+                                game.get("shorthanded_goals", 0),
+                                game.get("shorthanded_points", 0),
+                                game.get("game_winning_goals", 0),
+                                game.get("ot_goals", 0),
+                                False,
+                            )
+                        count += 1
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to persist game %s for player %s: %s",
+                            game.get("game_id"),
+                            player_id,
+                            e,
+                        )
+            except Exception as e:
+                logger.warning(
+                    "Failed to persist game log for player: %s",
+                    e,
+                )
+
+        logger.info("Persisted %d player game log entries", count)
+        return count
 
     def _parse_game_log(
         self,

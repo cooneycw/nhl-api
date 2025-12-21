@@ -16,8 +16,10 @@ from nhl_api.downloaders.sources.nhl_json.player_game_log import (
     PlayerGameLogDownloader,
     PlayerGameLogDownloaderConfig,
     SkaterGameStats,
+    _game_type_to_string,
     _get_localized,
     _parse_date,
+    _toi_to_seconds,
     create_player_game_log_downloader,
 )
 
@@ -703,3 +705,380 @@ class TestCreatePlayerGameLogDownloader:
         players = [(8478402, 20242025, 2)]
         downloader = create_player_game_log_downloader(players=players)
         assert downloader._players == players
+
+
+@pytest.mark.unit
+class TestToiToSeconds:
+    """Tests for _toi_to_seconds helper function."""
+
+    def test_valid_toi(self) -> None:
+        """Test converting valid TOI string."""
+        assert _toi_to_seconds("22:15") == 22 * 60 + 15
+
+    def test_zero_toi(self) -> None:
+        """Test converting zero TOI."""
+        assert _toi_to_seconds("00:00") == 0
+
+    def test_full_period(self) -> None:
+        """Test converting full period TOI."""
+        assert _toi_to_seconds("20:00") == 1200
+
+    def test_overtime_toi(self) -> None:
+        """Test converting overtime goalie TOI."""
+        assert _toi_to_seconds("65:00") == 3900
+
+    def test_empty_string(self) -> None:
+        """Test empty string returns 0."""
+        assert _toi_to_seconds("") == 0
+
+    def test_none_value(self) -> None:
+        """Test None-like value returns 0."""
+        # The function handles empty strings
+        assert _toi_to_seconds("") == 0
+
+    def test_invalid_format(self) -> None:
+        """Test invalid format returns 0."""
+        assert _toi_to_seconds("invalid") == 0
+
+    def test_single_part(self) -> None:
+        """Test single number returns 0."""
+        assert _toi_to_seconds("22") == 0
+
+
+@pytest.mark.unit
+class TestGameTypeToString:
+    """Tests for _game_type_to_string helper function."""
+
+    def test_regular_season(self) -> None:
+        """Test regular season returns R."""
+        assert _game_type_to_string(REGULAR_SEASON) == "R"
+        assert _game_type_to_string(2) == "R"
+
+    def test_playoffs(self) -> None:
+        """Test playoffs returns P."""
+        assert _game_type_to_string(PLAYOFFS) == "P"
+        assert _game_type_to_string(3) == "P"
+
+    def test_unknown_defaults_to_regular(self) -> None:
+        """Test unknown game type defaults to R."""
+        assert _game_type_to_string(0) == "R"
+        assert _game_type_to_string(99) == "R"
+
+
+@pytest.mark.unit
+class TestPlayerGameLogDownloaderPersist:
+    """Tests for persist method."""
+
+    @pytest.mark.asyncio
+    async def test_persist_empty_list(self) -> None:
+        """Test persisting empty list returns 0."""
+        downloader = PlayerGameLogDownloader()
+        mock_db = AsyncMock()
+
+        result = await downloader.persist(mock_db, [])
+
+        assert result == 0
+        mock_db.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_persist_skater_game_log(self) -> None:
+        """Test persisting skater game log."""
+        downloader = PlayerGameLogDownloader()
+        mock_db = AsyncMock()
+
+        game_log = {
+            "player_id": 8478402,
+            "season_id": 20242025,
+            "game_type": REGULAR_SEASON,
+            "is_goalie": False,
+            "games": [
+                {
+                    "game_id": 2024020500,
+                    "game_date": "2025-01-15",
+                    "team_abbrev": "EDM",
+                    "opponent_abbrev": "CGY",
+                    "home_road_flag": "H",
+                    "goals": 2,
+                    "assists": 1,
+                    "points": 3,
+                    "plus_minus": 2,
+                    "pim": 0,
+                    "toi": "22:15",
+                    "shots": 5,
+                    "shifts": 28,
+                    "power_play_goals": 1,
+                    "power_play_points": 2,
+                    "shorthanded_goals": 0,
+                    "shorthanded_points": 0,
+                    "game_winning_goals": 1,
+                    "ot_goals": 0,
+                }
+            ],
+        }
+
+        result = await downloader.persist(mock_db, [game_log])
+
+        assert result == 1
+        assert mock_db.execute.call_count == 1
+
+        # Verify SQL structure
+        call_args = mock_db.execute.call_args
+        sql = call_args[0][0]
+        assert "INSERT INTO player_game_logs" in sql
+        assert "ON CONFLICT (player_id, game_id)" in sql
+        assert "is_goalie" in sql
+
+    @pytest.mark.asyncio
+    async def test_persist_goalie_game_log(self) -> None:
+        """Test persisting goalie game log."""
+        downloader = PlayerGameLogDownloader()
+        mock_db = AsyncMock()
+
+        game_log = {
+            "player_id": 8477424,
+            "season_id": 20242025,
+            "game_type": REGULAR_SEASON,
+            "is_goalie": True,
+            "games": [
+                {
+                    "game_id": 2024020501,
+                    "game_date": "2025-01-16",
+                    "team_abbrev": "NSH",
+                    "opponent_abbrev": "COL",
+                    "home_road_flag": "R",
+                    "goals": 0,
+                    "assists": 0,
+                    "pim": 0,
+                    "toi": "60:00",
+                    "games_started": 1,
+                    "decision": "W",
+                    "shots_against": 32,
+                    "goals_against": 2,
+                    "save_pct": 0.938,
+                    "shutouts": 0,
+                }
+            ],
+        }
+
+        result = await downloader.persist(mock_db, [game_log])
+
+        assert result == 1
+        assert mock_db.execute.call_count == 1
+
+        # Verify goalie-specific fields in SQL
+        call_args = mock_db.execute.call_args
+        sql = call_args[0][0]
+        assert "decision" in sql
+        assert "shots_against" in sql
+        assert "save_pct" in sql
+
+    @pytest.mark.asyncio
+    async def test_persist_multiple_game_logs(self) -> None:
+        """Test persisting multiple game logs."""
+        downloader = PlayerGameLogDownloader()
+        mock_db = AsyncMock()
+
+        game_logs = [
+            {
+                "player_id": 8478402,
+                "season_id": 20242025,
+                "game_type": REGULAR_SEASON,
+                "is_goalie": False,
+                "games": [
+                    {"game_id": 2024020500, "game_date": "2025-01-15", "toi": "22:15"},
+                    {"game_id": 2024020501, "game_date": "2025-01-16", "toi": "20:00"},
+                ],
+            },
+            {
+                "player_id": 8477424,
+                "season_id": 20242025,
+                "game_type": REGULAR_SEASON,
+                "is_goalie": True,
+                "games": [
+                    {"game_id": 2024020500, "game_date": "2025-01-15", "toi": "60:00"},
+                ],
+            },
+        ]
+
+        result = await downloader.persist(mock_db, game_logs)
+
+        assert result == 3  # 2 skater games + 1 goalie game
+        assert mock_db.execute.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_persist_playoffs_game_type(self) -> None:
+        """Test persisting playoff game log."""
+        downloader = PlayerGameLogDownloader()
+        mock_db = AsyncMock()
+
+        game_log = {
+            "player_id": 8478402,
+            "season_id": 20242025,
+            "game_type": PLAYOFFS,
+            "is_goalie": False,
+            "games": [
+                {"game_id": 2024030111, "game_date": "2025-04-15", "toi": "25:00"}
+            ],
+        }
+
+        result = await downloader.persist(mock_db, [game_log])
+
+        assert result == 1
+        # Verify game_type is "P" for playoffs
+        call_args = mock_db.execute.call_args[0]
+        # The game_type_str should be at index 4 (after player_id, game_id, season_id)
+        assert call_args[4] == "P"
+
+    @pytest.mark.asyncio
+    async def test_persist_toi_conversion(self) -> None:
+        """Test that TOI is converted to seconds."""
+        downloader = PlayerGameLogDownloader()
+        mock_db = AsyncMock()
+
+        game_log = {
+            "player_id": 8478402,
+            "season_id": 20242025,
+            "game_type": REGULAR_SEASON,
+            "is_goalie": False,
+            "games": [
+                {"game_id": 2024020500, "game_date": "2025-01-15", "toi": "22:15"}
+            ],
+        }
+
+        await downloader.persist(mock_db, [game_log])
+
+        # TOI of 22:15 should be 1335 seconds
+        call_args = mock_db.execute.call_args[0]
+        # toi_seconds is at index 12 for skaters
+        assert call_args[12] == 1335
+
+    @pytest.mark.asyncio
+    async def test_persist_missing_game_id_skipped(self) -> None:
+        """Test that games without game_id are skipped."""
+        downloader = PlayerGameLogDownloader()
+        mock_db = AsyncMock()
+
+        game_log = {
+            "player_id": 8478402,
+            "season_id": 20242025,
+            "game_type": REGULAR_SEASON,
+            "is_goalie": False,
+            "games": [
+                {"game_date": "2025-01-15", "toi": "22:15"},  # No game_id
+            ],
+        }
+
+        result = await downloader.persist(mock_db, [game_log])
+
+        assert result == 0
+        mock_db.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_persist_invalid_date_handled(self) -> None:
+        """Test that invalid date is handled gracefully."""
+        downloader = PlayerGameLogDownloader()
+        mock_db = AsyncMock()
+
+        game_log = {
+            "player_id": 8478402,
+            "season_id": 20242025,
+            "game_type": REGULAR_SEASON,
+            "is_goalie": False,
+            "games": [
+                {
+                    "game_id": 2024020500,
+                    "game_date": "invalid-date",
+                    "toi": "22:15",
+                }
+            ],
+        }
+
+        result = await downloader.persist(mock_db, [game_log])
+
+        assert result == 1
+        # game_date should be None when invalid
+        call_args = mock_db.execute.call_args[0]
+        assert call_args[8] is None  # game_date parameter
+
+    @pytest.mark.asyncio
+    async def test_persist_continues_on_error(self) -> None:
+        """Test that persist continues on individual game error."""
+        downloader = PlayerGameLogDownloader()
+        mock_db = AsyncMock()
+        # First call fails, second succeeds
+        mock_db.execute.side_effect = [Exception("DB error"), None]
+
+        game_logs = [
+            {
+                "player_id": 8478402,
+                "season_id": 20242025,
+                "game_type": REGULAR_SEASON,
+                "is_goalie": False,
+                "games": [
+                    {"game_id": 2024020500, "game_date": "2025-01-15", "toi": "22:15"},
+                    {"game_id": 2024020501, "game_date": "2025-01-16", "toi": "20:00"},
+                ],
+            }
+        ]
+
+        result = await downloader.persist(mock_db, game_logs)
+
+        # First game fails, second succeeds
+        assert result == 1
+        assert mock_db.execute.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_persist_sql_structure_skater(self) -> None:
+        """Test SQL structure for skater persistence."""
+        downloader = PlayerGameLogDownloader()
+        mock_db = AsyncMock()
+
+        game_log = {
+            "player_id": 8478402,
+            "season_id": 20242025,
+            "game_type": REGULAR_SEASON,
+            "is_goalie": False,
+            "games": [
+                {"game_id": 2024020500, "game_date": "2025-01-15", "toi": "22:15"}
+            ],
+        }
+
+        await downloader.persist(mock_db, [game_log])
+
+        sql = mock_db.execute.call_args[0][0]
+        # Verify skater-specific columns
+        assert "points" in sql
+        assert "plus_minus" in sql
+        assert "shots" in sql
+        assert "shifts" in sql
+        assert "power_play_goals" in sql
+        assert "shorthanded_goals" in sql
+        assert "game_winning_goals" in sql
+        assert "ot_goals" in sql
+
+    @pytest.mark.asyncio
+    async def test_persist_sql_structure_goalie(self) -> None:
+        """Test SQL structure for goalie persistence."""
+        downloader = PlayerGameLogDownloader()
+        mock_db = AsyncMock()
+
+        game_log = {
+            "player_id": 8477424,
+            "season_id": 20242025,
+            "game_type": REGULAR_SEASON,
+            "is_goalie": True,
+            "games": [
+                {"game_id": 2024020500, "game_date": "2025-01-15", "toi": "60:00"}
+            ],
+        }
+
+        await downloader.persist(mock_db, [game_log])
+
+        sql = mock_db.execute.call_args[0][0]
+        # Verify goalie-specific columns
+        assert "games_started" in sql
+        assert "decision" in sql
+        assert "shots_against" in sql
+        assert "goals_against" in sql
+        assert "save_pct" in sql
+        assert "shutouts" in sql

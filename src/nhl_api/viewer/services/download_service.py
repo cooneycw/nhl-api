@@ -32,7 +32,8 @@ SOURCE_NAME_TO_ID = {
     "nhl_roster": 4,
     "nhl_standings": 5,
     "nhl_player": 6,
-    # HTML sources (7-15) will be added when implemented
+    "nhl_player_game_log": 7,  # Player game logs
+    # HTML sources (8-15) will be added when implemented
     "shift_chart": 16,  # NHL Stats API shift charts
 }
 
@@ -257,6 +258,7 @@ class DownloadService:
         from nhl_api.downloaders.sources.nhl_json import (
             BoxscoreDownloader,
             PlayByPlayDownloader,
+            PlayerGameLogDownloader,
             PlayerLandingDownloader,
             RosterDownloader,
             ScheduleDownloader,
@@ -273,6 +275,7 @@ class DownloadService:
             "nhl_roster": RosterDownloader,
             "nhl_standings": StandingsDownloader,
             "nhl_player": PlayerLandingDownloader,
+            "nhl_player_game_log": PlayerGameLogDownloader,
         }
 
         downloader_cls = downloader_map.get(source_name)
@@ -301,6 +304,10 @@ class DownloadService:
                 )
             elif source_name == "nhl_player":
                 await self._download_player_landing(
+                    db, batch_id, downloader, season_id, active_download
+                )
+            elif source_name == "nhl_player_game_log":
+                await self._download_player_game_logs(
                     db, batch_id, downloader, season_id, active_download
                 )
 
@@ -609,7 +616,7 @@ class DownloadService:
         season_id: int,
         active_download: ActiveDownloadTask | None,
     ) -> None:
-        """Download player landing pages."""
+        """Download player landing pages and persist to database."""
         # Get player IDs from rosters
         from nhl_api.downloaders.sources.nhl_json import (
             NHL_TEAM_ABBREVS,
@@ -642,12 +649,16 @@ class DownloadService:
             batch_id,
         )
 
+        # Collect successful results for persistence
+        successful_results: list[dict[str, Any]] = []
+
         # Download each player
         async for result in downloader.download_all():
             if active_download and active_download.cancel_requested:
                 raise asyncio.CancelledError()
 
             if result.is_successful:
+                successful_results.append(result.data)
                 if active_download:
                     active_download.items_completed += 1
                 await db.execute(
@@ -661,6 +672,92 @@ class DownloadService:
                     "UPDATE import_batches SET items_failed = items_failed + 1 WHERE batch_id = $1",
                     batch_id,
                 )
+
+        # Persist collected player data
+        if successful_results:
+            persisted = await downloader.persist(db, successful_results)
+            logger.info(
+                "Persisted landing data for %d players for season %d",
+                persisted,
+                season_id,
+            )
+
+    async def _download_player_game_logs(
+        self,
+        db: DatabaseService,
+        batch_id: int,
+        downloader: Any,
+        season_id: int,
+        active_download: ActiveDownloadTask | None,
+    ) -> None:
+        """Download player game logs and persist to database."""
+        # Get player IDs from rosters
+        from nhl_api.downloaders.sources.nhl_json import (
+            NHL_TEAM_ABBREVS,
+            RosterDownloader,
+        )
+        from nhl_api.downloaders.sources.nhl_json.player_game_log import REGULAR_SEASON
+
+        roster_config = DownloaderConfig(base_url=NHL_API_BASE_URL)
+        player_ids: set[int] = set()
+
+        roster_dl = RosterDownloader(roster_config)
+        async with roster_dl:
+            for team_abbrev in NHL_TEAM_ABBREVS:
+                try:
+                    roster = await roster_dl.get_roster_for_season(
+                        team_abbrev, season_id
+                    )
+                    for player in roster.forwards + roster.defensemen + roster.goalies:
+                        player_ids.add(player.player_id)
+                except Exception as e:
+                    logger.warning("Failed to get roster for %s: %s", team_abbrev, e)
+
+        # Set players for game log download (player_id, season_id, game_type)
+        players_list = [(pid, season_id, REGULAR_SEASON) for pid in player_ids]
+        downloader.set_players(players_list)
+
+        if active_download:
+            active_download.items_total = len(player_ids)
+
+        await db.execute(
+            "UPDATE import_batches SET items_total = $1 WHERE batch_id = $2",
+            len(player_ids),
+            batch_id,
+        )
+
+        # Collect successful results for persistence
+        successful_results: list[dict[str, Any]] = []
+
+        # Download each player's game log
+        async for result in downloader.download_all():
+            if active_download and active_download.cancel_requested:
+                raise asyncio.CancelledError()
+
+            if result.is_successful:
+                successful_results.append(result.data)
+                if active_download:
+                    active_download.items_completed += 1
+                await db.execute(
+                    "UPDATE import_batches SET items_success = items_success + 1 WHERE batch_id = $1",
+                    batch_id,
+                )
+            else:
+                if active_download:
+                    active_download.items_failed += 1
+                await db.execute(
+                    "UPDATE import_batches SET items_failed = items_failed + 1 WHERE batch_id = $1",
+                    batch_id,
+                )
+
+        # Persist collected game logs
+        if successful_results:
+            persisted = await downloader.persist(db, successful_results)
+            logger.info(
+                "Persisted %d game log entries for season %d",
+                persisted,
+                season_id,
+            )
 
     async def _complete_batch(
         self,
