@@ -1,4 +1,4 @@
--- Migration: 014_shift_charts.sql
+-- Migration: 015_shift_charts.sql
 -- Description: Game shift-by-shift player tracking data from NHL Stats API
 -- Author: Claude Code
 -- Date: 2025-12-21

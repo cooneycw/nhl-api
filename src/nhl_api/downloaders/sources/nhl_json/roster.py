@@ -21,6 +21,8 @@ from nhl_api.downloaders.base.protocol import DownloadError
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Sequence
 
+    from nhl_api.services.db import DatabaseService
+
 logger = logging.getLogger(__name__)
 
 # NHL JSON API base URL
@@ -471,6 +473,128 @@ class RosterDownloader(BaseDownloader):
                 continue
 
         return None
+
+    async def persist(
+        self,
+        db: DatabaseService,
+        rosters: list[ParsedRoster],
+    ) -> int:
+        """Persist downloaded rosters to the database.
+
+        This method:
+        1. Upserts players into the players table
+        2. Inserts roster entries into team_rosters table
+
+        Uses upsert (INSERT ... ON CONFLICT) to handle re-downloads gracefully.
+
+        Args:
+            db: Database service instance
+            rosters: List of ParsedRoster objects to persist
+
+        Returns:
+            Number of roster entries upserted
+        """
+        if not rosters:
+            return 0
+
+        roster_count = 0
+        player_count = 0
+
+        for roster in rosters:
+            # Determine season_id (use current season if not specified)
+            season_id = roster.season_id or 20242025
+
+            # Process all players from the roster
+            for player in roster.all_players:
+                # Determine roster_type based on position
+                if player.position_code == "G":
+                    roster_type = "goalie"
+                elif player.position_code == "D":
+                    roster_type = "defenseman"
+                else:
+                    roster_type = "forward"
+
+                # Upsert player into players table
+                await db.execute(
+                    """
+                    INSERT INTO players (
+                        player_id, first_name, last_name, birth_date,
+                        birth_city, birth_state_province, birth_country,
+                        height_inches, weight_lbs, shoots_catches,
+                        primary_position, sweater_number, headshot_url, active
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, TRUE)
+                    ON CONFLICT (player_id) DO UPDATE SET
+                        first_name = EXCLUDED.first_name,
+                        last_name = EXCLUDED.last_name,
+                        birth_date = COALESCE(EXCLUDED.birth_date, players.birth_date),
+                        birth_city = COALESCE(EXCLUDED.birth_city, players.birth_city),
+                        birth_state_province = COALESCE(
+                            EXCLUDED.birth_state_province, players.birth_state_province
+                        ),
+                        birth_country = COALESCE(
+                            EXCLUDED.birth_country, players.birth_country
+                        ),
+                        height_inches = COALESCE(
+                            EXCLUDED.height_inches, players.height_inches
+                        ),
+                        weight_lbs = COALESCE(EXCLUDED.weight_lbs, players.weight_lbs),
+                        shoots_catches = COALESCE(
+                            EXCLUDED.shoots_catches, players.shoots_catches
+                        ),
+                        primary_position = EXCLUDED.primary_position,
+                        sweater_number = EXCLUDED.sweater_number,
+                        headshot_url = COALESCE(
+                            EXCLUDED.headshot_url, players.headshot_url
+                        ),
+                        active = TRUE,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    player.player_id,
+                    player.first_name,
+                    player.last_name,
+                    player.birth_date,
+                    player.birth_city,
+                    player.birth_state_province,
+                    player.birth_country,
+                    player.height_inches if player.height_inches > 0 else None,
+                    player.weight_pounds if player.weight_pounds > 0 else None,
+                    player.shoots_catches if player.shoots_catches else None,
+                    player.position_code,
+                    player.sweater_number,
+                    player.headshot_url,
+                )
+                player_count += 1
+
+                # Insert roster entry
+                await db.execute(
+                    """
+                    INSERT INTO team_rosters (
+                        team_abbrev, season_id, player_id,
+                        position_code, sweater_number, roster_type
+                    ) VALUES ($1, $2, $3, $4, $5, $6)
+                    ON CONFLICT (team_abbrev, season_id, player_id, snapshot_date)
+                    DO UPDATE SET
+                        position_code = EXCLUDED.position_code,
+                        sweater_number = EXCLUDED.sweater_number,
+                        roster_type = EXCLUDED.roster_type,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    roster.team_abbrev,
+                    season_id,
+                    player.player_id,
+                    player.position_code,
+                    player.sweater_number,
+                    roster_type,
+                )
+                roster_count += 1
+
+        logger.info(
+            "Persisted %d roster entries for %d players across %d teams",
+            roster_count,
+            player_count,
+            len(rosters),
+        )
+        return roster_count
 
 
 def create_roster_downloader(

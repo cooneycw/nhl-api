@@ -511,8 +511,9 @@ class DownloadService:
         season_id: int,
         active_download: ActiveDownloadTask | None,
     ) -> None:
-        """Download rosters for all teams."""
+        """Download rosters for all teams and persist to database."""
         from nhl_api.downloaders.sources.nhl_json import NHL_TEAM_ABBREVS
+        from nhl_api.downloaders.sources.nhl_json.roster import ParsedRoster
 
         teams = NHL_TEAM_ABBREVS
 
@@ -525,12 +526,16 @@ class DownloadService:
             batch_id,
         )
 
+        # Collect all rosters for persistence
+        rosters: list[ParsedRoster] = []
+
         for team_abbrev in teams:
             if active_download and active_download.cancel_requested:
                 raise asyncio.CancelledError()
 
             try:
-                await downloader.get_roster_for_season(team_abbrev, season_id)
+                roster = await downloader.get_roster_for_season(team_abbrev, season_id)
+                rosters.append(roster)
                 if active_download:
                     active_download.items_completed += 1
                 await db.execute(
@@ -545,6 +550,15 @@ class DownloadService:
                     "UPDATE import_batches SET items_failed = items_failed + 1 WHERE batch_id = $1",
                     batch_id,
                 )
+
+        # Persist collected rosters to database
+        if rosters:
+            persisted = await downloader.persist(db, rosters)
+            logger.info(
+                "Downloaded and persisted %d roster entries for season %d",
+                persisted,
+                season_id,
+            )
 
     async def _download_standings(
         self,
