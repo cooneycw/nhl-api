@@ -1327,3 +1327,341 @@ class TestPlayerLandingDownloaderParsing:
         assert result["current_team_abbrev"] == "EDM"
         assert result["draft_details"]["overall_pick"] == 1
         assert result["is_goalie"] is False
+
+
+@pytest.fixture
+def mock_db() -> AsyncMock:
+    """Create a mock database service."""
+    db = AsyncMock()
+    db.execute = AsyncMock()
+    return db
+
+
+@pytest.mark.asyncio
+class TestPlayerLandingDownloaderPersist:
+    """Tests for PlayerLandingDownloader.persist method."""
+
+    async def test_persist_empty_list(self, mock_db: AsyncMock) -> None:
+        """Test persist with empty list returns 0."""
+        downloader = PlayerLandingDownloader()
+        result = await downloader.persist(mock_db, [])
+        assert result == 0
+        mock_db.execute.assert_not_called()
+
+    async def test_persist_single_skater(self, mock_db: AsyncMock) -> None:
+        """Test persist with single skater."""
+        downloader = PlayerLandingDownloader()
+
+        player_data = {
+            "player_id": 8478402,
+            "first_name": "Connor",
+            "last_name": "McDavid",
+            "birth_date": "1997-01-13",
+            "birth_city": "Richmond Hill",
+            "birth_state_province": "Ontario",
+            "birth_country": "CAN",
+            "height_inches": 73,
+            "weight_lbs": 194,
+            "shoots_catches": "L",
+            "position": "C",
+            "current_team_id": 22,
+            "sweater_number": 97,
+            "headshot_url": "https://example.com/headshot.png",
+            "hero_image_url": "https://example.com/hero.jpg",
+            "draft_details": {
+                "year": 2015,
+                "team_abbrev": "EDM",
+                "round": 1,
+                "pick_in_round": 1,
+                "overall_pick": 1,
+            },
+            "career_regular_season": {
+                "games_played": 747,
+                "goals": 382,
+                "assists": 758,
+                "points": 1140,
+                "plus_minus": 170,
+                "pim": 300,
+            },
+            "in_top_100_all_time": False,
+            "in_hhof": False,
+            "is_goalie": False,
+            "is_active": True,
+        }
+
+        result = await downloader.persist(mock_db, [player_data])
+
+        assert result == 1
+        mock_db.execute.assert_called_once()
+
+        # Verify key parameters were passed
+        call_args = mock_db.execute.call_args
+        assert 8478402 in call_args.args  # player_id
+        assert "Connor" in call_args.args  # first_name
+        assert "McDavid" in call_args.args  # last_name
+
+    async def test_persist_single_goalie(self, mock_db: AsyncMock) -> None:
+        """Test persist with single goalie."""
+        downloader = PlayerLandingDownloader()
+
+        player_data = {
+            "player_id": 8477424,
+            "first_name": "Juuse",
+            "last_name": "Saros",
+            "birth_date": "1995-04-19",
+            "birth_city": "Forssa",
+            "birth_state_province": None,
+            "birth_country": "FIN",
+            "height_inches": 71,
+            "weight_lbs": 180,
+            "shoots_catches": "L",
+            "position": "G",
+            "current_team_id": 18,
+            "sweater_number": 74,
+            "headshot_url": "https://example.com/headshot.png",
+            "hero_image_url": "https://example.com/hero.jpg",
+            "draft_details": {
+                "year": 2013,
+                "team_abbrev": "NSH",
+                "round": 4,
+                "pick_in_round": 8,
+                "overall_pick": 99,
+            },
+            "career_regular_season": {
+                "games_played": 434,
+                "games_started": 417,
+                "wins": 214,
+                "losses": 161,
+                "ot_losses": 41,
+                "shutouts": 27,
+                "goals_against_avg": 2.695,
+                "save_pct": 0.913,
+                "goals": 0,
+                "assists": 8,
+                "pim": 10,
+            },
+            "in_top_100_all_time": False,
+            "in_hhof": False,
+            "is_goalie": True,
+            "is_active": True,
+        }
+
+        result = await downloader.persist(mock_db, [player_data])
+
+        assert result == 1
+        mock_db.execute.assert_called_once()
+
+        # Verify goalie-specific stats were included
+        call_args = mock_db.execute.call_args
+        assert 214 in call_args.args  # career_wins
+
+    async def test_persist_multiple_players(self, mock_db: AsyncMock) -> None:
+        """Test persist with multiple players."""
+        downloader = PlayerLandingDownloader()
+
+        players = [
+            {
+                "player_id": 8478402,
+                "first_name": "Connor",
+                "last_name": "McDavid",
+                "is_goalie": False,
+                "is_active": True,
+            },
+            {
+                "player_id": 8479318,
+                "first_name": "Auston",
+                "last_name": "Matthews",
+                "is_goalie": False,
+                "is_active": True,
+            },
+            {
+                "player_id": 8477424,
+                "first_name": "Juuse",
+                "last_name": "Saros",
+                "is_goalie": True,
+                "is_active": True,
+            },
+        ]
+
+        result = await downloader.persist(mock_db, players)
+
+        assert result == 3
+        assert mock_db.execute.call_count == 3
+
+    async def test_persist_undrafted_player(self, mock_db: AsyncMock) -> None:
+        """Test persist with undrafted player (draft_details is None)."""
+        downloader = PlayerLandingDownloader()
+
+        player_data = {
+            "player_id": 8477999,
+            "first_name": "Undrafted",
+            "last_name": "Player",
+            "draft_details": None,
+            "is_goalie": False,
+            "is_active": True,
+        }
+
+        result = await downloader.persist(mock_db, [player_data])
+
+        assert result == 1
+        mock_db.execute.assert_called_once()
+
+    async def test_persist_handles_zero_height_weight(self, mock_db: AsyncMock) -> None:
+        """Test that zero height/weight are converted to None."""
+        downloader = PlayerLandingDownloader()
+
+        player_data = {
+            "player_id": 8478402,
+            "first_name": "Connor",
+            "last_name": "McDavid",
+            "height_inches": 0,  # Should become None
+            "weight_lbs": 0,  # Should become None
+            "is_goalie": False,
+            "is_active": True,
+        }
+
+        await downloader.persist(mock_db, [player_data])
+
+        call_args = mock_db.execute.call_args
+        # height_inches is at position 8, weight_lbs at 9 in the SQL
+        # Check that None was passed for these values
+        args = call_args.args
+        assert args[8] is None  # height_inches
+        assert args[9] is None  # weight_lbs
+
+    async def test_persist_skater_career_stats_extraction(
+        self, mock_db: AsyncMock
+    ) -> None:
+        """Test that skater career stats are correctly extracted."""
+        downloader = PlayerLandingDownloader()
+
+        player_data = {
+            "player_id": 8478402,
+            "first_name": "Connor",
+            "last_name": "McDavid",
+            "career_regular_season": {
+                "games_played": 747,
+                "goals": 382,
+                "assists": 758,
+                "points": 1140,
+                "plus_minus": 170,
+                "pim": 300,
+            },
+            "is_goalie": False,
+            "is_active": True,
+        }
+
+        await downloader.persist(mock_db, [player_data])
+
+        call_args = mock_db.execute.call_args
+        args = call_args.args
+        # Career stats start at position 21
+        assert args[21] == 747  # career_gp
+        assert args[22] == 382  # career_goals
+        assert args[23] == 758  # career_assists
+        assert args[24] == 1140  # career_points
+        assert args[25] == 170  # career_plus_minus
+        assert args[26] == 300  # career_pim
+
+    async def test_persist_goalie_career_stats_extraction(
+        self, mock_db: AsyncMock
+    ) -> None:
+        """Test that goalie career stats are correctly extracted."""
+        downloader = PlayerLandingDownloader()
+
+        player_data = {
+            "player_id": 8477424,
+            "first_name": "Juuse",
+            "last_name": "Saros",
+            "career_regular_season": {
+                "games_played": 434,
+                "wins": 214,
+                "losses": 161,
+                "ot_losses": 41,
+                "shutouts": 27,
+                "goals_against_avg": 2.695,
+                "save_pct": 0.913,
+                "goals": 0,
+                "assists": 8,
+                "pim": 10,
+            },
+            "is_goalie": True,
+            "is_active": True,
+        }
+
+        await downloader.persist(mock_db, [player_data])
+
+        call_args = mock_db.execute.call_args
+        args = call_args.args
+        # Goalie-specific stats
+        assert args[27] == 214  # career_wins
+        assert args[28] == 161  # career_losses
+        assert args[29] == 41  # career_ot_losses
+        assert args[30] == 27  # career_shutouts
+        assert args[31] == 2.695  # career_gaa
+        assert args[32] == 0.913  # career_save_pct
+
+    async def test_persist_handles_exception_for_single_player(
+        self, mock_db: AsyncMock
+    ) -> None:
+        """Test that persist continues after single player failure."""
+        downloader = PlayerLandingDownloader()
+        mock_db.execute = AsyncMock(side_effect=[Exception("DB error"), None, None])
+
+        players = [
+            {"player_id": 1, "is_goalie": False, "is_active": True},
+            {"player_id": 2, "is_goalie": False, "is_active": True},
+            {"player_id": 3, "is_goalie": False, "is_active": True},
+        ]
+
+        result = await downloader.persist(mock_db, players)
+
+        # First fails, second and third succeed
+        assert result == 2
+        assert mock_db.execute.call_count == 3
+
+    async def test_persist_sql_structure(self, mock_db: AsyncMock) -> None:
+        """Test that SQL INSERT statement is correctly structured."""
+        downloader = PlayerLandingDownloader()
+
+        player_data = {
+            "player_id": 8478402,
+            "first_name": "Connor",
+            "last_name": "McDavid",
+            "is_goalie": False,
+            "is_active": True,
+        }
+
+        await downloader.persist(mock_db, [player_data])
+
+        call_args = mock_db.execute.call_args
+        sql = call_args.args[0]
+
+        # Check SQL has the right structure
+        assert "INSERT INTO players" in sql
+        assert "ON CONFLICT (player_id) DO UPDATE" in sql
+        assert "draft_year" in sql
+        assert "career_gp" in sql
+        assert "in_top_100_all_time" in sql
+        assert "in_hhof" in sql
+
+    async def test_persist_hhof_and_top100(self, mock_db: AsyncMock) -> None:
+        """Test that HHOF and Top 100 flags are persisted."""
+        downloader = PlayerLandingDownloader()
+
+        player_data = {
+            "player_id": 8471675,
+            "first_name": "Sidney",
+            "last_name": "Crosby",
+            "in_top_100_all_time": True,
+            "in_hhof": False,  # Not yet retired
+            "is_goalie": False,
+            "is_active": True,
+        }
+
+        await downloader.persist(mock_db, [player_data])
+
+        call_args = mock_db.execute.call_args
+        args = call_args.args
+        assert args[33] is True  # in_top_100_all_time
+        assert args[34] is False  # in_hhof
