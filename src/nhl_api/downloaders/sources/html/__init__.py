@@ -70,6 +70,13 @@ from nhl_api.downloaders.sources.html.shot_summary import (
     SituationStats,
     TeamShotSummary,
 )
+from nhl_api.downloaders.sources.html.time_on_ice import (
+    ParsedTimeOnIce,
+    PeriodTOI,
+    PlayerTOI,
+    ShiftInfo,
+    TimeOnIceDownloader,
+)
 
 __all__ = [
     "BaseHTMLDownloader",
@@ -110,5 +117,10 @@ __all__ = [
     "TeamFaceoffSummary",
     "TeamInfo",
     "TeamShotSummary",
+    "TimeOnIceDownloader",
+    "ParsedTimeOnIce",
+    "PeriodTOI",
+    "PlayerTOI",
+    "ShiftInfo",
     "ZoneFaceoffs",
 ]
