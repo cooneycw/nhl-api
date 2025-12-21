@@ -5,29 +5,35 @@ information from DailyFaceoff.com.
 
 Available downloaders:
 - BaseDailyFaceoffDownloader: Base class for all DailyFaceoff downloaders
+- LineCombinationsDownloader: Line combinations (forward lines, defensive pairs, goalies)
 - PenaltyKillDownloader: Penalty kill unit configurations (PK1, PK2)
 - PowerPlayDownloader: Download power play unit configurations (PP1, PP2)
 
 Example usage:
     from nhl_api.downloaders.sources.dailyfaceoff import (
+        LineCombinationsDownloader,
         PenaltyKillDownloader,
         PowerPlayDownloader,
         DailyFaceoffConfig,
     )
 
-    config = DailyFaceoffConfig()
-    async with PenaltyKillDownloader(config) as downloader:
-        result = await downloader.download_team(10)  # Toronto
-
-    async with PowerPlayDownloader() as downloader:
+    async with LineCombinationsDownloader() as downloader:
         result = await downloader.download_team(6)  # Boston Bruins
-        print(result.data["pp1"])
+        print(result.data["forward_lines"])
 """
 
 from nhl_api.downloaders.sources.dailyfaceoff.base_dailyfaceoff_downloader import (
     DAILYFACEOFF_CONFIG,
     BaseDailyFaceoffDownloader,
     DailyFaceoffConfig,
+)
+from nhl_api.downloaders.sources.dailyfaceoff.line_combinations import (
+    DefensivePair,
+    ForwardLine,
+    GoalieDepth,
+    LineCombinationsDownloader,
+    PlayerInfo,
+    TeamLineup,
 )
 from nhl_api.downloaders.sources.dailyfaceoff.penalty_kill import (
     PenaltyKillDownloader,
@@ -53,6 +59,13 @@ __all__ = [
     "BaseDailyFaceoffDownloader",
     "DAILYFACEOFF_CONFIG",
     "DailyFaceoffConfig",
+    # Line Combinations
+    "LineCombinationsDownloader",
+    "ForwardLine",
+    "DefensivePair",
+    "GoalieDepth",
+    "PlayerInfo",
+    "TeamLineup",
     # Penalty Kill
     "PenaltyKillDownloader",
     "PenaltyKillUnit",
