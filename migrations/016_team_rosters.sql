@@ -1,4 +1,4 @@
--- Migration: 014_team_rosters.sql
+-- Migration: 016_team_rosters.sql
 -- Description: Team roster snapshots for tracking player-team assignments by season
 -- Author: Claude Code
 -- Date: 2025-12-21

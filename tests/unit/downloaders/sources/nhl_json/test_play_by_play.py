@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -15,6 +16,8 @@ from nhl_api.downloaders.sources.nhl_json.play_by_play import (
     PlayByPlayDownloader,
     PlayByPlayDownloaderConfig,
     PlayerRole,
+    _extract_goalie_id,
+    _extract_player,
     create_play_by_play_downloader,
 )
 
@@ -856,3 +859,358 @@ class TestPlayByPlayDownloaderConfig:
         assert config.requests_per_second == 10.0
         assert config.max_retries == 5
         assert config.include_raw_response is True
+
+
+@pytest.mark.unit
+class TestExtractPlayer:
+    """Tests for _extract_player helper function."""
+
+    def test_extract_player_at_index(self) -> None:
+        """Test extracting player at valid index."""
+        players = [
+            {"player_id": 8478402, "role": "scorer"},
+            {"player_id": 8477934, "role": "assist1"},
+        ]
+        player_id, role = _extract_player(players, 0)
+        assert player_id == 8478402
+        assert role == "scorer"
+
+    def test_extract_player_second_index(self) -> None:
+        """Test extracting player at second index."""
+        players = [
+            {"player_id": 8478402, "role": "scorer"},
+            {"player_id": 8477934, "role": "assist1"},
+        ]
+        player_id, role = _extract_player(players, 1)
+        assert player_id == 8477934
+        assert role == "assist1"
+
+    def test_extract_player_out_of_range(self) -> None:
+        """Test extracting player at out of range index returns None."""
+        players = [{"player_id": 8478402, "role": "scorer"}]
+        player_id, role = _extract_player(players, 5)
+        assert player_id is None
+        assert role is None
+
+    def test_extract_player_empty_list(self) -> None:
+        """Test extracting from empty list returns None."""
+        player_id, role = _extract_player([], 0)
+        assert player_id is None
+        assert role is None
+
+    def test_extract_player_skips_goalie(self) -> None:
+        """Test that goalie role is skipped for primary slots."""
+        players = [{"player_id": 8478402, "role": "goalie"}]
+        player_id, role = _extract_player(players, 0)
+        assert player_id is None
+        assert role is None
+
+
+@pytest.mark.unit
+class TestExtractGoalieId:
+    """Tests for _extract_goalie_id helper function."""
+
+    def test_extract_goalie_found(self) -> None:
+        """Test extracting goalie ID when present."""
+        players = [
+            {"player_id": 8478402, "role": "scorer"},
+            {"player_id": 8479394, "role": "goalie"},
+        ]
+        goalie_id = _extract_goalie_id(players)
+        assert goalie_id == 8479394
+
+    def test_extract_goalie_not_found(self) -> None:
+        """Test extracting goalie ID when not present."""
+        players = [
+            {"player_id": 8478402, "role": "scorer"},
+            {"player_id": 8477934, "role": "assist1"},
+        ]
+        goalie_id = _extract_goalie_id(players)
+        assert goalie_id is None
+
+    def test_extract_goalie_empty_list(self) -> None:
+        """Test extracting from empty list returns None."""
+        goalie_id = _extract_goalie_id([])
+        assert goalie_id is None
+
+
+@pytest.mark.unit
+class TestPlayByPlayDownloaderPersist:
+    """Tests for PlayByPlayDownloader.persist() method."""
+
+    @pytest.fixture
+    def mock_db(self) -> AsyncMock:
+        """Create a mock database service."""
+        db = AsyncMock()
+        db.execute = AsyncMock()
+        return db
+
+    @pytest.fixture
+    def mock_http_client(self) -> MagicMock:
+        """Create a mock HTTP client."""
+        client = MagicMock()
+        client.get = AsyncMock()
+        client.close = AsyncMock()
+        return client
+
+    @pytest.fixture
+    def mock_rate_limiter(self) -> MagicMock:
+        """Create a mock rate limiter."""
+        limiter = MagicMock()
+        limiter.wait = AsyncMock()
+        return limiter
+
+    @pytest.fixture
+    def config(self) -> PlayByPlayDownloaderConfig:
+        """Create a test configuration."""
+        return PlayByPlayDownloaderConfig()
+
+    @pytest.fixture
+    def downloader(
+        self,
+        config: PlayByPlayDownloaderConfig,
+        mock_http_client: MagicMock,
+        mock_rate_limiter: MagicMock,
+    ) -> PlayByPlayDownloader:
+        """Create a PlayByPlayDownloader with mock HTTP client."""
+        dl = PlayByPlayDownloader(
+            config,
+            http_client=mock_http_client,
+            rate_limiter=mock_rate_limiter,
+        )
+        dl._owns_http_client = False
+        return dl
+
+    @pytest.fixture
+    def sample_pbp_data(self) -> list[dict[str, Any]]:
+        """Create sample play-by-play data."""
+        return [
+            {
+                "game_id": 2024020500,
+                "season_id": 20242025,
+                "events": [
+                    {
+                        "event_id": 1,
+                        "sort_order": 1,
+                        "event_type": "faceoff",
+                        "period": 1,
+                        "period_type": "REG",
+                        "time_in_period": "00:00",
+                        "time_remaining": "20:00",
+                        "x_coord": 0.0,
+                        "y_coord": 0.0,
+                        "zone": "N",
+                        "home_score": 0,
+                        "away_score": 0,
+                        "home_sog": 0,
+                        "away_sog": 0,
+                        "event_owner_team_id": 22,
+                        "description": "",
+                        "details": {},
+                        "players": [
+                            {"player_id": 8478402, "role": "winner"},
+                            {"player_id": 8477934, "role": "loser"},
+                        ],
+                    },
+                    {
+                        "event_id": 2,
+                        "sort_order": 2,
+                        "event_type": "goal",
+                        "period": 1,
+                        "period_type": "REG",
+                        "time_in_period": "05:30",
+                        "time_remaining": "14:30",
+                        "x_coord": 85.0,
+                        "y_coord": -10.0,
+                        "zone": "O",
+                        "home_score": 1,
+                        "away_score": 0,
+                        "home_sog": 5,
+                        "away_sog": 3,
+                        "event_owner_team_id": 22,
+                        "description": "McDavid goal",
+                        "details": {"shot_type": "wrist", "scorer_season_total": 25},
+                        "players": [
+                            {"player_id": 8478402, "role": "scorer"},
+                            {"player_id": 8477934, "role": "assist1"},
+                            {"player_id": 8479394, "role": "goalie"},
+                        ],
+                    },
+                ],
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_persist_empty_list(
+        self,
+        downloader: PlayByPlayDownloader,
+        mock_db: AsyncMock,
+    ) -> None:
+        """Test persisting empty list returns 0."""
+        result = await downloader.persist(mock_db, [])
+        assert result == 0
+        mock_db.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_persist_single_game(
+        self,
+        downloader: PlayByPlayDownloader,
+        mock_db: AsyncMock,
+        sample_pbp_data: list[dict[str, Any]],
+    ) -> None:
+        """Test persisting play-by-play for one game."""
+        result = await downloader.persist(mock_db, sample_pbp_data)
+
+        assert result == 2  # 2 events
+        assert mock_db.execute.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_persist_extracts_players(
+        self,
+        downloader: PlayByPlayDownloader,
+        mock_db: AsyncMock,
+        sample_pbp_data: list[dict[str, Any]],
+    ) -> None:
+        """Test that player IDs are extracted correctly."""
+        await downloader.persist(mock_db, sample_pbp_data)
+
+        # Check second call (goal event)
+        goal_call = mock_db.execute.call_args_list[1]
+        args = goal_call[0]
+
+        # player1_id (scorer)
+        assert args[9] == 8478402
+        # player1_role
+        assert args[10] == "scorer"
+        # player2_id (assist1)
+        assert args[11] == 8477934
+        # player2_role
+        assert args[12] == "assist1"
+        # goalie_id
+        assert args[15] == 8479394
+
+    @pytest.mark.asyncio
+    async def test_persist_extracts_shot_type(
+        self,
+        downloader: PlayByPlayDownloader,
+        mock_db: AsyncMock,
+        sample_pbp_data: list[dict[str, Any]],
+    ) -> None:
+        """Test that shot type is extracted from details."""
+        await downloader.persist(mock_db, sample_pbp_data)
+
+        # Check second call (goal event with shot_type)
+        goal_call = mock_db.execute.call_args_list[1]
+        args = goal_call[0]
+
+        # shot_type is parameter 23
+        assert args[23] == "wrist"
+
+    @pytest.mark.asyncio
+    async def test_persist_coordinates(
+        self,
+        downloader: PlayByPlayDownloader,
+        mock_db: AsyncMock,
+        sample_pbp_data: list[dict[str, Any]],
+    ) -> None:
+        """Test that coordinates are persisted."""
+        await downloader.persist(mock_db, sample_pbp_data)
+
+        # Check second call (goal event with coordinates)
+        goal_call = mock_db.execute.call_args_list[1]
+        args = goal_call[0]
+
+        # x_coord is parameter 16
+        assert args[16] == 85.0
+        # y_coord is parameter 17
+        assert args[17] == -10.0
+        # zone is parameter 18
+        assert args[18] == "O"
+
+    @pytest.mark.asyncio
+    async def test_persist_multiple_games(
+        self,
+        downloader: PlayByPlayDownloader,
+        mock_db: AsyncMock,
+    ) -> None:
+        """Test persisting play-by-play for multiple games."""
+        data = [
+            {
+                "game_id": 2024020500,
+                "events": [
+                    {
+                        "event_id": 1,
+                        "sort_order": 1,
+                        "event_type": "faceoff",
+                        "period": 1,
+                        "players": [],
+                        "details": {},
+                    }
+                ],
+            },
+            {
+                "game_id": 2024020501,
+                "events": [
+                    {
+                        "event_id": 1,
+                        "sort_order": 1,
+                        "event_type": "faceoff",
+                        "period": 1,
+                        "players": [],
+                        "details": {},
+                    },
+                    {
+                        "event_id": 2,
+                        "sort_order": 2,
+                        "event_type": "shot-on-goal",
+                        "period": 1,
+                        "players": [],
+                        "details": {},
+                    },
+                ],
+            },
+        ]
+
+        result = await downloader.persist(mock_db, data)
+
+        assert result == 3  # 1 + 2 events
+        assert mock_db.execute.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_persist_skips_empty_events(
+        self,
+        downloader: PlayByPlayDownloader,
+        mock_db: AsyncMock,
+    ) -> None:
+        """Test that games with no events are skipped."""
+        data: list[dict[str, Any]] = [
+            {"game_id": 2024020500, "events": []},
+            {"game_id": None, "events": [{"event_id": 1}]},
+        ]
+
+        result = await downloader.persist(mock_db, data)
+
+        assert result == 0
+        mock_db.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_persist_details_as_json(
+        self,
+        downloader: PlayByPlayDownloader,
+        mock_db: AsyncMock,
+        sample_pbp_data: list[dict[str, Any]],
+    ) -> None:
+        """Test that details are serialized as JSON."""
+        await downloader.persist(mock_db, sample_pbp_data)
+
+        # Check second call (goal event with details)
+        goal_call = mock_db.execute.call_args_list[1]
+        args = goal_call[0]
+
+        # details is parameter 25 (last one)
+        import json
+
+        details_json = args[25]
+        details = json.loads(details_json)
+        assert details["shot_type"] == "wrist"
+        assert details["scorer_season_total"] == 25
