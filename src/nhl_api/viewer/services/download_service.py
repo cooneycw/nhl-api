@@ -460,7 +460,7 @@ class DownloadService:
         season_id: int,
         active_download: ActiveDownloadTask | None,
     ) -> None:
-        """Download standings snapshots for a season."""
+        """Download standings snapshots for a season and persist to database."""
         # Get current standings (single snapshot)
         if active_download:
             active_download.items_total = 1
@@ -471,13 +471,19 @@ class DownloadService:
         )
 
         try:
-            await downloader.get_current_standings()
+            standings = await downloader.get_current_standings()
+
+            # Persist standings to database
+            persisted = await downloader.persist(db, standings)
+
             if active_download:
                 active_download.items_completed = 1
             await db.execute(
-                "UPDATE import_batches SET items_success = 1 WHERE batch_id = $1",
+                "UPDATE import_batches SET items_success = $1 WHERE batch_id = $2",
+                persisted,
                 batch_id,
             )
+            logger.info("Downloaded and persisted standings for %d teams", persisted)
         except Exception as e:
             logger.warning("Failed to download standings: %s", e)
             if active_download:
