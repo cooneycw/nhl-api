@@ -14,6 +14,7 @@ Example usage:
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass, field
@@ -29,6 +30,7 @@ from nhl_api.downloaders.base.protocol import DownloadError
 if TYPE_CHECKING:
     from nhl_api.downloaders.base.rate_limiter import RateLimiter
     from nhl_api.downloaders.base.retry_handler import RetryHandler
+    from nhl_api.services.db import DatabaseService
     from nhl_api.utils.http_client import HTTPClient
 
 logger = logging.getLogger(__name__)
@@ -703,6 +705,158 @@ class PlayByPlayDownloader(BaseDownloader):
             "role": player.role,
             "sweater_number": player.sweater_number,
         }
+
+    async def persist(
+        self,
+        db: DatabaseService,
+        play_by_play_data: list[dict[str, Any]],
+    ) -> int:
+        """Persist play-by-play events to the database.
+
+        Uses upsert (INSERT ... ON CONFLICT) to handle re-downloads gracefully.
+
+        Args:
+            db: Database service instance
+            play_by_play_data: List of play-by-play dicts (from download results)
+
+        Returns:
+            Number of events upserted
+        """
+        if not play_by_play_data:
+            return 0
+
+        total_count = 0
+
+        for pbp_dict in play_by_play_data:
+            game_id = pbp_dict.get("game_id")
+            events = pbp_dict.get("events", [])
+
+            if not game_id or not events:
+                continue
+
+            for event in events:
+                # Extract player info from the players list
+                players = event.get("players", [])
+                player1_id, player1_role = _extract_player(players, 0)
+                player2_id, player2_role = _extract_player(players, 1)
+                player3_id, player3_role = _extract_player(players, 2)
+
+                # Extract goalie separately (look for 'goalie' role)
+                goalie_id = _extract_goalie_id(players)
+
+                # Get shot type from details if available
+                details = event.get("details", {})
+                shot_type = details.get("shot_type")
+
+                # Serialize details to JSON
+                details_json = json.dumps(details) if details else None
+
+                await db.execute(
+                    """
+                    INSERT INTO game_events (
+                        game_id, event_idx, event_type, period, period_type,
+                        time_in_period, time_remaining, event_owner_team_id,
+                        player1_id, player1_role, player2_id, player2_role,
+                        player3_id, player3_role, goalie_id,
+                        x_coord, y_coord, zone,
+                        home_score, away_score, home_sog, away_sog,
+                        shot_type, description, details
+                    ) VALUES (
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                        $11, $12, $13, $14, $15, $16, $17, $18,
+                        $19, $20, $21, $22, $23, $24, $25
+                    )
+                    ON CONFLICT (game_id, event_idx) DO UPDATE SET
+                        event_type = EXCLUDED.event_type,
+                        period = EXCLUDED.period,
+                        period_type = EXCLUDED.period_type,
+                        time_in_period = EXCLUDED.time_in_period,
+                        time_remaining = EXCLUDED.time_remaining,
+                        event_owner_team_id = EXCLUDED.event_owner_team_id,
+                        player1_id = EXCLUDED.player1_id,
+                        player1_role = EXCLUDED.player1_role,
+                        player2_id = EXCLUDED.player2_id,
+                        player2_role = EXCLUDED.player2_role,
+                        player3_id = EXCLUDED.player3_id,
+                        player3_role = EXCLUDED.player3_role,
+                        goalie_id = EXCLUDED.goalie_id,
+                        x_coord = EXCLUDED.x_coord,
+                        y_coord = EXCLUDED.y_coord,
+                        zone = EXCLUDED.zone,
+                        home_score = EXCLUDED.home_score,
+                        away_score = EXCLUDED.away_score,
+                        home_sog = EXCLUDED.home_sog,
+                        away_sog = EXCLUDED.away_sog,
+                        shot_type = EXCLUDED.shot_type,
+                        description = EXCLUDED.description,
+                        details = EXCLUDED.details
+                    """,
+                    game_id,
+                    event.get("sort_order", event.get("event_id", 0)),
+                    event.get("event_type", ""),
+                    event.get("period", 0),
+                    event.get("period_type"),
+                    event.get("time_in_period"),
+                    event.get("time_remaining"),
+                    event.get("event_owner_team_id"),
+                    player1_id,
+                    player1_role,
+                    player2_id,
+                    player2_role,
+                    player3_id,
+                    player3_role,
+                    goalie_id,
+                    event.get("x_coord"),
+                    event.get("y_coord"),
+                    event.get("zone"),
+                    event.get("home_score", 0),
+                    event.get("away_score", 0),
+                    event.get("home_sog", 0),
+                    event.get("away_sog", 0),
+                    shot_type,
+                    event.get("description"),
+                    details_json,
+                )
+                total_count += 1
+
+        logger.info("Persisted %d play-by-play events to database", total_count)
+        return total_count
+
+
+def _extract_player(
+    players: list[dict[str, Any]], index: int
+) -> tuple[int | None, str | None]:
+    """Extract player ID and role at a given index.
+
+    Args:
+        players: List of player dicts
+        index: Index to extract from
+
+    Returns:
+        Tuple of (player_id, role) or (None, None) if not available
+    """
+    if index < len(players):
+        player = players[index]
+        # Skip goalie role for primary player slots
+        if player.get("role") == "goalie":
+            return None, None
+        return player.get("player_id"), player.get("role")
+    return None, None
+
+
+def _extract_goalie_id(players: list[dict[str, Any]]) -> int | None:
+    """Extract goalie ID from players list.
+
+    Args:
+        players: List of player dicts
+
+    Returns:
+        Goalie player ID or None if not found
+    """
+    for player in players:
+        if player.get("role") == "goalie":
+            return player.get("player_id")
+    return None
 
 
 def create_play_by_play_downloader(
