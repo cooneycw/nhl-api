@@ -71,7 +71,7 @@ jobs:
         run: pip install -e .[test,viewer,scraping]
 
       - name: Run tests with coverage
-        run: pytest
+        run: pytest -m "not integration and not live"
 
       - name: Upload coverage report
         if: matrix.python-version == '3.11'
