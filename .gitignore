@@ -83,3 +83,14 @@ logs/
 
 # Claude Code local settings
 .claude/
+
+# Data storage directories
+data/
+!data/html/README.md
+
+# Allow HTML storage README
+!data/
+!data/html/
+
+# Exclude HTML report files (test artifacts)
+data/**/*.HTM
