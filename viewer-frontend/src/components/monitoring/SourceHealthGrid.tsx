@@ -88,11 +88,11 @@ function formatTimeAgo(dateString: string | null): string {
   return date.toLocaleDateString()
 }
 
-function getSuccessRateColor(rate: number | null): string {
-  if (rate === null) return 'bg-gray-100 text-gray-600'
-  if (rate >= 95) return 'bg-green-100 text-green-700'
-  if (rate >= 80) return 'bg-yellow-100 text-yellow-700'
-  return 'bg-red-100 text-red-700'
+function getSuccessRateVariant(rate: number | null): 'secondary' | 'success' | 'warning' | 'error' {
+  if (rate === null) return 'secondary'
+  if (rate >= 95) return 'success'
+  if (rate >= 80) return 'warning'
+  return 'error'
 }
 
 interface SourceCardProps {
@@ -123,7 +123,7 @@ function SourceCard({ source }: SourceCardProps) {
         {source.success_rate_24h !== null && (
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">24h Success</span>
-            <Badge className={getSuccessRateColor(source.success_rate_24h)}>
+            <Badge variant={getSuccessRateVariant(source.success_rate_24h)}>
               {source.success_rate_24h.toFixed(1)}%
             </Badge>
           </div>
