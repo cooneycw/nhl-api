@@ -800,7 +800,7 @@ class DownloadService:
         status: str,
         error_message: str | None = None,
     ) -> None:
-        """Mark a batch as complete."""
+        """Mark a batch as complete and refresh monitoring views."""
         await db.execute(
             """
             UPDATE import_batches
@@ -812,3 +812,16 @@ class DownloadService:
             batch_id,
         )
         logger.info("Batch %d completed with status: %s", batch_id, status)
+
+        # Refresh materialized views for monitoring
+        # Use CONCURRENTLY to avoid blocking reads
+        try:
+            await db.execute(
+                "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_download_batch_stats"
+            )
+            await db.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_source_health")
+            await db.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_game_summary")
+            logger.debug("Refreshed materialized views after batch %d", batch_id)
+        except Exception as e:
+            # Don't fail the batch if view refresh fails
+            logger.warning("Failed to refresh materialized views: %s", e)
