@@ -72,6 +72,7 @@ class DownloadStage:
         source: SourceDefinition,
         game_id: int | None = None,
         season_id: int | None = None,
+        team_id: int | None = None,
         *,
         config_overrides: dict[str, Any] | None = None,
     ) -> DownloadStageResult:
@@ -81,6 +82,7 @@ class DownloadStage:
             source: Source definition to download from
             game_id: Game ID for game-level sources
             season_id: Season ID for season-level sources
+            team_id: Team ID for team-level sources (DailyFaceoff)
             config_overrides: Optional config overrides
 
         Returns:
@@ -99,6 +101,10 @@ class DownloadStage:
             # Choose download method based on source type
             if source.requires_game_id and game_id is not None:
                 result = await downloader.download_game(game_id)
+                data = result.data if hasattr(result, "data") else result
+            elif team_id is not None and hasattr(downloader, "download_team"):
+                # Team-based sources (DailyFaceoff)
+                result = await downloader.download_team(team_id)
                 data = result.data if hasattr(result, "data") else result
             elif season_id is not None:
                 # For season-level sources, download first item

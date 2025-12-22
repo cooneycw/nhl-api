@@ -37,6 +37,9 @@ FIXTURE_SEASON_ID = 20242025
 ALT_FIXTURE_GAME_ID = 2024020500
 ALT_FIXTURE_SEASON_ID = 20242025
 
+# Team fixture: Toronto Maple Leafs (team_id=10 in NHL API)
+FIXTURE_TEAM_ID = 10
+
 
 # =============================================================================
 # Game Fixtures
@@ -62,6 +65,12 @@ def fixture_season_id() -> int:
 def alt_fixture_game_id() -> int:
     """Alternative game ID for additional testing."""
     return ALT_FIXTURE_GAME_ID
+
+
+@pytest.fixture
+def fixture_team_id() -> int:
+    """Team ID for team-based download testing (Toronto Maple Leafs)."""
+    return FIXTURE_TEAM_ID
 
 
 # =============================================================================

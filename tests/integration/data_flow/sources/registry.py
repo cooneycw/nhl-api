@@ -199,6 +199,153 @@ class SourceRegistry:
         ),
     }
 
+    # HTML Report sources (parse-only, no persist)
+    HTML_SOURCES: dict[str, SourceDefinition] = {
+        "html_gs": SourceDefinition(
+            name="html_gs",
+            display_name="Game Summary (GS)",
+            downloader_class="nhl_api.downloaders.sources.html.game_summary.GameSummaryDownloader",
+            config_class="nhl_api.downloaders.sources.html.base_html_downloader.HTMLDownloaderConfig",
+            source_type=SourceType.GAME,
+            has_persist=False,
+            requires_game_id=True,
+        ),
+        "html_es": SourceDefinition(
+            name="html_es",
+            display_name="Event Summary (ES)",
+            downloader_class="nhl_api.downloaders.sources.html.event_summary.EventSummaryDownloader",
+            config_class="nhl_api.downloaders.sources.html.base_html_downloader.HTMLDownloaderConfig",
+            source_type=SourceType.GAME,
+            has_persist=False,
+            requires_game_id=True,
+        ),
+        "html_pl": SourceDefinition(
+            name="html_pl",
+            display_name="Play-by-Play (PL)",
+            downloader_class="nhl_api.downloaders.sources.html.play_by_play.PlayByPlayDownloader",
+            config_class="nhl_api.downloaders.sources.html.base_html_downloader.HTMLDownloaderConfig",
+            source_type=SourceType.GAME,
+            has_persist=False,
+            requires_game_id=True,
+        ),
+        "html_fs": SourceDefinition(
+            name="html_fs",
+            display_name="Faceoff Summary (FS)",
+            downloader_class="nhl_api.downloaders.sources.html.faceoff_summary.FaceoffSummaryDownloader",
+            config_class="nhl_api.downloaders.sources.html.base_html_downloader.HTMLDownloaderConfig",
+            source_type=SourceType.GAME,
+            has_persist=False,
+            requires_game_id=True,
+        ),
+        "html_fc": SourceDefinition(
+            name="html_fc",
+            display_name="Faceoff Comparison (FC)",
+            downloader_class="nhl_api.downloaders.sources.html.faceoff_comparison.FaceoffComparisonDownloader",
+            config_class="nhl_api.downloaders.sources.html.base_html_downloader.HTMLDownloaderConfig",
+            source_type=SourceType.GAME,
+            has_persist=False,
+            requires_game_id=True,
+        ),
+        "html_ro": SourceDefinition(
+            name="html_ro",
+            display_name="Roster Report (RO)",
+            downloader_class="nhl_api.downloaders.sources.html.roster.RosterDownloader",
+            config_class="nhl_api.downloaders.sources.html.base_html_downloader.HTMLDownloaderConfig",
+            source_type=SourceType.GAME,
+            has_persist=False,
+            requires_game_id=True,
+        ),
+        "html_ss": SourceDefinition(
+            name="html_ss",
+            display_name="Shot Summary (SS)",
+            downloader_class="nhl_api.downloaders.sources.html.shot_summary.ShotSummaryDownloader",
+            config_class="nhl_api.downloaders.sources.html.base_html_downloader.HTMLDownloaderConfig",
+            source_type=SourceType.GAME,
+            has_persist=False,
+            requires_game_id=True,
+        ),
+        "html_th": SourceDefinition(
+            name="html_th",
+            display_name="TOI Home (TH)",
+            downloader_class="nhl_api.downloaders.sources.html.time_on_ice.TimeOnIceDownloader",
+            config_class="nhl_api.downloaders.sources.html.base_html_downloader.HTMLDownloaderConfig",
+            source_type=SourceType.GAME,
+            has_persist=False,
+            requires_game_id=True,
+        ),
+        "html_tv": SourceDefinition(
+            name="html_tv",
+            display_name="TOI Visitor (TV)",
+            downloader_class="nhl_api.downloaders.sources.html.time_on_ice.TimeOnIceDownloader",
+            config_class="nhl_api.downloaders.sources.html.base_html_downloader.HTMLDownloaderConfig",
+            source_type=SourceType.GAME,
+            has_persist=False,
+            requires_game_id=True,
+        ),
+    }
+
+    # DailyFaceoff sources (team-based, no persist)
+    DAILYFACEOFF_SOURCES: dict[str, SourceDefinition] = {
+        "dailyfaceoff_lines": SourceDefinition(
+            name="dailyfaceoff_lines",
+            display_name="Line Combinations",
+            downloader_class="nhl_api.downloaders.sources.dailyfaceoff.line_combinations.LineCombinationsDownloader",
+            config_class="nhl_api.downloaders.sources.dailyfaceoff.base_dailyfaceoff_downloader.DailyFaceoffConfig",
+            source_type=SourceType.TEAM,
+            has_persist=False,
+            requires_game_id=False,
+        ),
+        "dailyfaceoff_pp": SourceDefinition(
+            name="dailyfaceoff_pp",
+            display_name="Power Play Units",
+            downloader_class="nhl_api.downloaders.sources.dailyfaceoff.power_play.PowerPlayDownloader",
+            config_class="nhl_api.downloaders.sources.dailyfaceoff.base_dailyfaceoff_downloader.DailyFaceoffConfig",
+            source_type=SourceType.TEAM,
+            has_persist=False,
+            requires_game_id=False,
+        ),
+        "dailyfaceoff_pk": SourceDefinition(
+            name="dailyfaceoff_pk",
+            display_name="Penalty Kill Units",
+            downloader_class="nhl_api.downloaders.sources.dailyfaceoff.penalty_kill.PenaltyKillDownloader",
+            config_class="nhl_api.downloaders.sources.dailyfaceoff.base_dailyfaceoff_downloader.DailyFaceoffConfig",
+            source_type=SourceType.TEAM,
+            has_persist=False,
+            requires_game_id=False,
+        ),
+        "dailyfaceoff_injuries": SourceDefinition(
+            name="dailyfaceoff_injuries",
+            display_name="Injuries",
+            downloader_class="nhl_api.downloaders.sources.dailyfaceoff.injuries.InjuryDownloader",
+            config_class="nhl_api.downloaders.sources.dailyfaceoff.base_dailyfaceoff_downloader.DailyFaceoffConfig",
+            source_type=SourceType.TEAM,
+            has_persist=False,
+            requires_game_id=False,
+        ),
+        "dailyfaceoff_goalies": SourceDefinition(
+            name="dailyfaceoff_goalies",
+            display_name="Starting Goalies",
+            downloader_class="nhl_api.downloaders.sources.dailyfaceoff.starting_goalies.StartingGoaliesDownloader",
+            config_class="nhl_api.downloaders.sources.dailyfaceoff.base_dailyfaceoff_downloader.DailyFaceoffConfig",
+            source_type=SourceType.DATE,
+            has_persist=False,
+            requires_game_id=False,
+        ),
+    }
+
+    # QuantHockey sources (season-based, no persist)
+    QUANTHOCKEY_SOURCES: dict[str, SourceDefinition] = {
+        "quanthockey_player_stats": SourceDefinition(
+            name="quanthockey_player_stats",
+            display_name="QuantHockey Player Stats",
+            downloader_class="nhl_api.downloaders.sources.external.quanthockey.player_stats.QuantHockeyPlayerStatsDownloader",
+            config_class="nhl_api.downloaders.sources.external.quanthockey.player_stats.QuantHockeyConfig",
+            source_type=SourceType.SEASON,
+            has_persist=False,
+            requires_game_id=False,
+        ),
+    }
+
     # All source names that have persist methods
     PERSIST_SOURCE_NAMES: tuple[str, ...] = tuple(GAME_SOURCES.keys())
 
@@ -209,12 +356,25 @@ class SourceRegistry:
         "nhl_stats_shift_charts",
     )
 
+    # HTML game-level sources
+    HTML_GAME_LEVEL_SOURCE_NAMES: tuple[str, ...] = tuple(HTML_SOURCES.keys())
+
+    @classmethod
+    def _all_source_dicts(cls) -> list[dict[str, SourceDefinition]]:
+        """Return all source dictionaries."""
+        return [
+            cls.GAME_SOURCES,
+            cls.HTML_SOURCES,
+            cls.DAILYFACEOFF_SOURCES,
+            cls.QUANTHOCKEY_SOURCES,
+        ]
+
     @classmethod
     def get_source(cls, name: str) -> SourceDefinition:
         """Get a source definition by name.
 
         Args:
-            name: Source name (e.g., "nhl_json_boxscore")
+            name: Source name (e.g., "nhl_json_boxscore", "html_gs")
 
         Returns:
             SourceDefinition for the source
@@ -222,8 +382,9 @@ class SourceRegistry:
         Raises:
             KeyError: If source not found
         """
-        if name in cls.GAME_SOURCES:
-            return cls.GAME_SOURCES[name]
+        for source_dict in cls._all_source_dicts():
+            if name in source_dict:
+                return source_dict[name]
         raise KeyError(f"Unknown source: {name}")
 
     @classmethod
@@ -233,7 +394,10 @@ class SourceRegistry:
         Returns:
             List of all SourceDefinition objects
         """
-        return list(cls.GAME_SOURCES.values())
+        sources: list[SourceDefinition] = []
+        for source_dict in cls._all_source_dicts():
+            sources.extend(source_dict.values())
+        return sources
 
     @classmethod
     def get_persist_sources(cls) -> list[SourceDefinition]:
@@ -242,16 +406,45 @@ class SourceRegistry:
         Returns:
             List of SourceDefinition objects with has_persist=True
         """
-        return [s for s in cls.GAME_SOURCES.values() if s.has_persist]
+        return [s for s in cls.get_all_sources() if s.has_persist]
 
     @classmethod
     def get_game_level_sources(cls) -> list[SourceDefinition]:
-        """Get sources that download per-game data.
+        """Get sources that download per-game data (NHL JSON/Stats).
 
         Returns:
             List of SourceDefinition objects that require game_id
         """
         return [s for s in cls.GAME_SOURCES.values() if s.requires_game_id]
+
+    @classmethod
+    def get_html_sources(cls) -> list[SourceDefinition]:
+        """Get all HTML report sources.
+
+        Returns:
+            List of HTML SourceDefinition objects
+        """
+        return list(cls.HTML_SOURCES.values())
+
+    @classmethod
+    def get_dailyfaceoff_sources(cls) -> list[SourceDefinition]:
+        """Get all DailyFaceoff sources.
+
+        Returns:
+            List of DailyFaceoff SourceDefinition objects
+        """
+        return list(cls.DAILYFACEOFF_SOURCES.values())
+
+    @classmethod
+    def get_external_sources(cls) -> list[SourceDefinition]:
+        """Get all external (third-party) sources.
+
+        Returns:
+            List of external SourceDefinition objects
+        """
+        return list(cls.DAILYFACEOFF_SOURCES.values()) + list(
+            cls.QUANTHOCKEY_SOURCES.values()
+        )
 
     @classmethod
     def get_source_names(cls) -> list[str]:
@@ -260,4 +453,19 @@ class SourceRegistry:
         Returns:
             List of source name strings
         """
-        return list(cls.GAME_SOURCES.keys())
+        names: list[str] = []
+        for source_dict in cls._all_source_dicts():
+            names.extend(source_dict.keys())
+        return names
+
+    @classmethod
+    def get_sources_by_type(cls, source_type: SourceType) -> list[SourceDefinition]:
+        """Get sources filtered by type.
+
+        Args:
+            source_type: Type to filter by (GAME, SEASON, TEAM, etc.)
+
+        Returns:
+            List of SourceDefinition objects matching the type
+        """
+        return [s for s in cls.get_all_sources() if s.source_type == source_type]
