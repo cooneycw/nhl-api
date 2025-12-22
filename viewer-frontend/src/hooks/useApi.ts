@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, type HealthResponse, type DashboardResponse, type BatchSummary, type SourceListResponse } from '@/lib/api'
+import { api, type HealthResponse, type DashboardResponse, type BatchSummary, type SourceListResponse, type FailureListResponse, type RetryResponse } from '@/lib/api'
 
 // Health check
 export function useHealth() {
@@ -40,13 +40,25 @@ export function useSourceHealth() {
   })
 }
 
+// Failed downloads list
+export function useFailures(page = 1, pageSize = 20) {
+  return useQuery({
+    queryKey: ['monitoring', 'failures', page, pageSize],
+    queryFn: () => api.get<FailureListResponse>('/monitoring/failures', {
+      page: String(page),
+      page_size: String(pageSize),
+    }),
+    refetchInterval: 30000, // 30 seconds
+  })
+}
+
 // Retry failed download
 export function useRetryDownload() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (downloadId: string) =>
-      api.post(`/monitoring/failures/${downloadId}/retry`),
+    mutationFn: (progressId: number) =>
+      api.post<RetryResponse>(`/monitoring/failures/${progressId}/retry`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['monitoring'] })
     },

@@ -135,3 +135,32 @@ export interface PaginatedResponse<T> {
   per_page: number
   pages: number
 }
+
+// Failure types
+export interface FailedDownload {
+  progress_id: number
+  batch_id: number | null
+  source_id: number
+  source_name: string
+  source_type: string
+  season_id: number | null
+  item_key: string
+  status: string
+  attempts: number
+  last_attempt_at: string | null
+  error_message: string | null
+}
+
+export interface FailureListResponse {
+  total: number
+  page: number
+  page_size: number
+  pages: number
+  failures: FailedDownload[]
+}
+
+export interface RetryResponse {
+  progress_id: number
+  status: string
+  message: string
+}
