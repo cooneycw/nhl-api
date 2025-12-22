@@ -15,16 +15,20 @@ Example usage:
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from bs4 import BeautifulSoup, Tag
 
 from nhl_api.downloaders.sources.html.base_html_downloader import (
     BaseHTMLDownloader,
 )
+
+if TYPE_CHECKING:
+    from nhl_api.services.db import DatabaseService
 
 logger = logging.getLogger(__name__)
 
@@ -640,3 +644,69 @@ class EventSummaryDownloader(BaseHTMLDownloader):
             ],
             "totals": team.totals,
         }
+
+    async def persist(
+        self,
+        db: DatabaseService,
+        summaries: list[dict[str, Any]],
+    ) -> int:
+        """Persist event summary data to the database.
+
+        Stores parsed HTML event summary data including player statistics
+        for cross-source validation.
+
+        Args:
+            db: Database service instance
+            summaries: List of parsed event summary dictionaries
+
+        Returns:
+            Number of event summaries persisted
+        """
+        if not summaries:
+            return 0
+
+        count = 0
+        for summary in summaries:
+            game_id = summary.get("game_id")
+            season_id = summary.get("season_id")
+
+            if not game_id or not season_id:
+                logger.warning("Skipping event summary without game_id or season_id")
+                continue
+
+            away_team = summary.get("away_team", {})
+            home_team = summary.get("home_team", {})
+
+            await db.execute(
+                """
+                INSERT INTO html_event_summary (
+                    game_id, season_id, away_team_abbrev, home_team_abbrev,
+                    away_skaters, home_skaters, away_goalies, home_goalies,
+                    away_totals, home_totals, parsed_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)
+                ON CONFLICT (game_id, season_id) DO UPDATE SET
+                    away_team_abbrev = EXCLUDED.away_team_abbrev,
+                    home_team_abbrev = EXCLUDED.home_team_abbrev,
+                    away_skaters = EXCLUDED.away_skaters,
+                    home_skaters = EXCLUDED.home_skaters,
+                    away_goalies = EXCLUDED.away_goalies,
+                    home_goalies = EXCLUDED.home_goalies,
+                    away_totals = EXCLUDED.away_totals,
+                    home_totals = EXCLUDED.home_totals,
+                    parsed_at = CURRENT_TIMESTAMP
+                """,
+                game_id,
+                season_id,
+                away_team.get("abbrev"),
+                home_team.get("abbrev"),
+                json.dumps(away_team.get("players", [])),
+                json.dumps(home_team.get("players", [])),
+                json.dumps(away_team.get("goalies", [])),
+                json.dumps(home_team.get("goalies", [])),
+                json.dumps(away_team.get("totals", {})),
+                json.dumps(home_team.get("totals", {})),
+            )
+            count += 1
+
+        logger.info("Persisted %d HTML event summaries", count)
+        return count

@@ -25,6 +25,7 @@ Note:
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from collections.abc import Callable
@@ -41,6 +42,7 @@ from nhl_api.downloaders.sources.html.base_html_downloader import (
 if TYPE_CHECKING:
     from nhl_api.downloaders.base.rate_limiter import RateLimiter
     from nhl_api.downloaders.base.retry_handler import RetryHandler
+    from nhl_api.services.db import DatabaseService
     from nhl_api.utils.http_client import HTTPClient
 
 logger = logging.getLogger(__name__)
@@ -633,3 +635,54 @@ class TimeOnIceDownloader(BaseHTMLDownloader):
             "pp_toi": period.pp_toi,
             "sh_toi": period.sh_toi,
         }
+
+    async def persist(
+        self,
+        db: DatabaseService,
+        toi_data: list[dict[str, Any]],
+    ) -> int:
+        """Persist time on ice data to the database.
+
+        Stores parsed HTML time on ice data including player shifts
+        and period TOI summaries for cross-source validation.
+
+        Args:
+            db: Database service instance
+            toi_data: List of parsed time on ice dictionaries
+
+        Returns:
+            Number of TOI records persisted
+        """
+        if not toi_data:
+            return 0
+
+        count = 0
+        for toi in toi_data:
+            game_id = toi.get("game_id")
+            season_id = toi.get("season_id")
+            side = toi.get("side")
+
+            if not game_id or not season_id or not side:
+                logger.warning("Skipping TOI data without game_id, season_id, or side")
+                continue
+
+            await db.execute(
+                """
+                INSERT INTO html_time_on_ice (
+                    game_id, season_id, side, team_abbrev, players, parsed_at
+                ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+                ON CONFLICT (game_id, season_id, side) DO UPDATE SET
+                    team_abbrev = EXCLUDED.team_abbrev,
+                    players = EXCLUDED.players,
+                    parsed_at = CURRENT_TIMESTAMP
+                """,
+                game_id,
+                season_id,
+                side,
+                toi.get("team_abbrev"),
+                json.dumps(toi.get("players", [])),
+            )
+            count += 1
+
+        logger.info("Persisted %d HTML time on ice records", count)
+        return count

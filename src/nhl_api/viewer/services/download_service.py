@@ -33,7 +33,12 @@ SOURCE_NAME_TO_ID = {
     "nhl_standings": 5,
     "nhl_player": 6,
     "nhl_player_game_log": 7,  # Player game logs
-    # HTML sources (8-15) will be added when implemented
+    # HTML sources (assigned in migration 023)
+    "html_game_summary": 8,
+    "html_event_summary": 9,
+    "html_time_on_ice": 10,
+    "html_faceoff_summary": 11,
+    "html_shot_summary": 12,
     "shift_chart": 16,  # NHL Stats API shift charts
     # DailyFaceoff sources (IDs assigned in migration 022)
     "dailyfaceoff_lines": 20,
@@ -246,9 +251,9 @@ class DownloadService:
                     db, batch_id, source_name, season_id, force
                 )
             elif source_type == "html_report":
-                # HTML downloaders not yet implemented
-                logger.warning("HTML downloaders not yet implemented: %s", source_name)
-                await self._complete_batch(db, batch_id, "failed", "Not implemented")
+                await self._run_html_report_download(
+                    db, batch_id, source_name, season_id, game_types, force
+                )
             else:
                 logger.error("Unknown source type: %s", source_type)
                 await self._complete_batch(
@@ -642,6 +647,155 @@ class DownloadService:
                 "UPDATE import_batches SET items_failed = 1 WHERE batch_id = $1",
                 batch_id,
             )
+
+    async def _run_html_report_download(
+        self,
+        db: DatabaseService,
+        batch_id: int,
+        source_name: str,
+        season_id: int,
+        game_types: list[int],
+        force: bool,
+    ) -> None:
+        """Run a download for NHL HTML reports.
+
+        HTML reports are game-based. We first fetch the schedule to get game IDs,
+        then download and parse each HTML report.
+        """
+        from nhl_api.downloaders.sources.html import (
+            EventSummaryDownloader,
+            FaceoffSummaryDownloader,
+            GameSummaryDownloader,
+            HTMLDownloaderConfig,
+            ShotSummaryDownloader,
+            TimeOnIceDownloader,
+        )
+        from nhl_api.downloaders.sources.nhl_json import ScheduleDownloader
+
+        config = HTMLDownloaderConfig()
+        active_download = self._active_downloads.get(batch_id)
+
+        # Map source names to downloader classes
+        downloader_map: dict[str, type] = {
+            "html_game_summary": GameSummaryDownloader,
+            "html_event_summary": EventSummaryDownloader,
+            "html_faceoff_summary": FaceoffSummaryDownloader,
+            "html_shot_summary": ShotSummaryDownloader,
+        }
+
+        # Time on Ice has special handling (home/away sides)
+        is_toi = source_name == "html_time_on_ice"
+
+        # Get completed game IDs from schedule
+        schedule_config = DownloaderConfig(base_url=NHL_API_BASE_URL)
+        schedule_dl = ScheduleDownloader(schedule_config)
+        async with schedule_dl:
+            all_games = await schedule_dl.get_season_schedule(season_id)
+
+        # Filter by game types and completed status
+        type_filtered = [g for g in all_games if g.game_type in game_types]
+        completed_games = [g for g in type_filtered if g.game_state in ("OFF", "FINAL")]
+        game_ids = [g.game_id for g in completed_games]
+
+        # For TOI, we download both home and away for each game
+        total_items = len(game_ids) * 2 if is_toi else len(game_ids)
+
+        logger.info(
+            "Downloading %s for %d completed games (game_types=%s)",
+            source_name,
+            len(game_ids),
+            game_types,
+        )
+
+        if active_download:
+            active_download.items_total = total_items
+
+        await db.execute(
+            "UPDATE import_batches SET items_total = $1 WHERE batch_id = $2",
+            total_items,
+            batch_id,
+        )
+
+        successful_results: list[dict[str, Any]] = []
+
+        if is_toi:
+            # Download both home and away TOI
+            for side in ["home", "away"]:
+                downloader = TimeOnIceDownloader(config, side=side)
+                downloader.set_game_ids(game_ids)
+
+                async with downloader:
+                    async for result in downloader.download_season(season_id):
+                        if active_download and active_download.cancel_requested:
+                            raise asyncio.CancelledError()
+
+                        if result.is_successful:
+                            successful_results.append(result.data)
+                            if active_download:
+                                active_download.items_completed += 1
+                            await db.execute(
+                                "UPDATE import_batches SET items_success = items_success + 1 WHERE batch_id = $1",
+                                batch_id,
+                            )
+                        else:
+                            if active_download:
+                                active_download.items_failed += 1
+                            await db.execute(
+                                "UPDATE import_batches SET items_failed = items_failed + 1 WHERE batch_id = $1",
+                                batch_id,
+                            )
+
+            # Persist collected TOI data
+            if successful_results:
+                # Use one of the downloaders for persist (they all have same persist method)
+                toi_dl = TimeOnIceDownloader(config, side="home")
+                persisted = await toi_dl.persist(db, successful_results)
+                logger.info(
+                    "Persisted %d HTML time on ice records for season %d",
+                    persisted,
+                    season_id,
+                )
+        else:
+            # Standard single-sided HTML reports
+            downloader_cls = downloader_map.get(source_name)
+            if not downloader_cls:
+                raise ValueError(f"No downloader for source: {source_name}")
+
+            downloader = downloader_cls(config)
+            downloader.set_game_ids(game_ids)
+
+            async with downloader:
+                async for result in downloader.download_season(season_id):
+                    if active_download and active_download.cancel_requested:
+                        raise asyncio.CancelledError()
+
+                    if result.is_successful:
+                        successful_results.append(result.data)
+                        if active_download:
+                            active_download.items_completed += 1
+                        await db.execute(
+                            "UPDATE import_batches SET items_success = items_success + 1 WHERE batch_id = $1",
+                            batch_id,
+                        )
+                    else:
+                        if active_download:
+                            active_download.items_failed += 1
+                        await db.execute(
+                            "UPDATE import_batches SET items_failed = items_failed + 1 WHERE batch_id = $1",
+                            batch_id,
+                        )
+
+            # Persist collected results
+            if successful_results:
+                persisted = await downloader.persist(db, successful_results)
+                logger.info(
+                    "Persisted %d %s records for season %d",
+                    persisted,
+                    source_name,
+                    season_id,
+                )
+
+        await self._complete_batch(db, batch_id, "completed")
 
     async def _download_schedule(
         self,
