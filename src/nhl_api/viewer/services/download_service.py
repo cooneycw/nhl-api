@@ -35,6 +35,12 @@ SOURCE_NAME_TO_ID = {
     "nhl_player_game_log": 7,  # Player game logs
     # HTML sources (8-15) will be added when implemented
     "shift_chart": 16,  # NHL Stats API shift charts
+    # DailyFaceoff sources (IDs assigned in migration 022)
+    "dailyfaceoff_lines": 20,
+    "dailyfaceoff_power_play": 21,
+    "dailyfaceoff_penalty_kill": 22,
+    "dailyfaceoff_injuries": 23,
+    "dailyfaceoff_starting_goalies": 24,
 }
 
 
@@ -235,6 +241,10 @@ class DownloadService:
                 await self._run_shift_chart_download(
                     db, batch_id, source_name, season_id, game_types, force
                 )
+            elif source_type == "dailyfaceoff":
+                await self._run_dailyfaceoff_download(
+                    db, batch_id, source_name, season_id, force
+                )
             elif source_type == "html_report":
                 # HTML downloaders not yet implemented
                 logger.warning("HTML downloaders not yet implemented: %s", source_name)
@@ -414,6 +424,224 @@ class DownloadService:
             )
 
         await self._complete_batch(db, batch_id, "completed")
+
+    async def _run_dailyfaceoff_download(
+        self,
+        db: DatabaseService,
+        batch_id: int,
+        source_name: str,
+        season_id: int,
+        force: bool,
+    ) -> None:
+        """Run a download for DailyFaceoff data sources.
+
+        DailyFaceoff data is team-based (not game-based), so we iterate
+        through all 32 teams rather than games.
+        """
+        from datetime import date
+
+        from nhl_api.downloaders.sources.dailyfaceoff import (
+            DailyFaceoffConfig,
+            InjuryDownloader,
+            LineCombinationsDownloader,
+            PenaltyKillDownloader,
+            PowerPlayDownloader,
+            StartingGoaliesDownloader,
+        )
+
+        config = DailyFaceoffConfig()
+        active_download = self._active_downloads.get(batch_id)
+        snapshot_date = date.today()
+
+        # Map source names to downloader classes
+        downloader_map: dict[str, type] = {
+            "dailyfaceoff_lines": LineCombinationsDownloader,
+            "dailyfaceoff_power_play": PowerPlayDownloader,
+            "dailyfaceoff_penalty_kill": PenaltyKillDownloader,
+            "dailyfaceoff_injuries": InjuryDownloader,
+            "dailyfaceoff_starting_goalies": StartingGoaliesDownloader,
+        }
+
+        downloader_cls = downloader_map.get(source_name)
+        if not downloader_cls:
+            raise ValueError(f"No downloader for source: {source_name}")
+
+        logger.info(
+            "Starting DailyFaceoff download: %s for season %d",
+            source_name,
+            season_id,
+        )
+
+        async with downloader_cls(config) as downloader:
+            # Starting goalies is date-based, not team-based
+            if source_name == "dailyfaceoff_starting_goalies":
+                await self._download_starting_goalies(
+                    db, batch_id, downloader, season_id, snapshot_date, active_download
+                )
+            else:
+                # Team-based downloads (lines, PP, PK, injuries)
+                await self._download_team_based_dailyfaceoff(
+                    db,
+                    batch_id,
+                    downloader,
+                    source_name,
+                    season_id,
+                    snapshot_date,
+                    active_download,
+                )
+
+        await self._complete_batch(db, batch_id, "completed")
+
+    async def _download_team_based_dailyfaceoff(
+        self,
+        db: DatabaseService,
+        batch_id: int,
+        downloader: Any,
+        source_name: str,
+        season_id: int,
+        snapshot_date: Any,  # date type
+        active_download: ActiveDownloadTask | None,
+    ) -> None:
+        """Download DailyFaceoff data for all teams.
+
+        This handles lines, power play, penalty kill, and injuries which
+        are all team-based downloads.
+        """
+        from nhl_api.downloaders.sources.dailyfaceoff.team_mapping import TEAM_SLUGS
+
+        # Get all active team IDs (exclude Arizona Coyotes)
+        team_ids = [tid for tid in TEAM_SLUGS.keys() if tid != 53]
+
+        if active_download:
+            active_download.items_total = len(team_ids)
+
+        await db.execute(
+            "UPDATE import_batches SET items_total = $1 WHERE batch_id = $2",
+            len(team_ids),
+            batch_id,
+        )
+
+        logger.info(
+            "Downloading %s for %d teams",
+            source_name,
+            len(team_ids),
+        )
+
+        # Collect results for batch persistence
+        successful_results: list[tuple[str, dict[str, Any]]] = []
+
+        async for result in downloader.download_all_teams():
+            if active_download and active_download.cancel_requested:
+                raise asyncio.CancelledError()
+
+            team_abbrev = result.data.get("team_abbreviation", "")
+
+            if result.is_successful:
+                successful_results.append((team_abbrev, result.data))
+                if active_download:
+                    active_download.items_completed += 1
+                await db.execute(
+                    "UPDATE import_batches SET items_success = items_success + 1 WHERE batch_id = $1",
+                    batch_id,
+                )
+            else:
+                logger.warning(
+                    "Failed to download %s for team %s: %s",
+                    source_name,
+                    team_abbrev,
+                    result.error_message,
+                )
+                if active_download:
+                    active_download.items_failed += 1
+                await db.execute(
+                    "UPDATE import_batches SET items_failed = items_failed + 1 WHERE batch_id = $1",
+                    batch_id,
+                )
+
+        # Persist all collected results
+        if successful_results:
+            total_persisted = 0
+            for team_abbrev, data in successful_results:
+                try:
+                    count = await downloader.persist(
+                        db, data, team_abbrev, season_id, snapshot_date
+                    )
+                    total_persisted += count
+                except Exception as e:
+                    logger.warning(
+                        "Failed to persist %s for %s: %s",
+                        source_name,
+                        team_abbrev,
+                        e,
+                    )
+
+            logger.info(
+                "Persisted %d %s records for season %d",
+                total_persisted,
+                source_name,
+                season_id,
+            )
+
+    async def _download_starting_goalies(
+        self,
+        db: DatabaseService,
+        batch_id: int,
+        downloader: Any,
+        season_id: int,
+        snapshot_date: Any,  # date type
+        active_download: ActiveDownloadTask | None,
+    ) -> None:
+        """Download DailyFaceoff starting goalies for today's games.
+
+        Starting goalies is a league-wide page, not team-by-team.
+        """
+        if active_download:
+            active_download.items_total = 1
+
+        await db.execute(
+            "UPDATE import_batches SET items_total = 1 WHERE batch_id = $1",
+            batch_id,
+        )
+
+        try:
+            # Download the starting goalies page
+            result = await downloader.download_tonight()
+
+            if result.is_successful:
+                # Persist the starting goalies
+                count = await downloader.persist(db, result.data, snapshot_date)
+                logger.info(
+                    "Persisted %d starting goalie records for %s",
+                    count,
+                    snapshot_date,
+                )
+
+                if active_download:
+                    active_download.items_completed = 1
+                await db.execute(
+                    "UPDATE import_batches SET items_success = 1 WHERE batch_id = $1",
+                    batch_id,
+                )
+            else:
+                logger.warning(
+                    "Failed to download starting goalies: %s",
+                    result.error_message,
+                )
+                if active_download:
+                    active_download.items_failed = 1
+                await db.execute(
+                    "UPDATE import_batches SET items_failed = 1 WHERE batch_id = $1",
+                    batch_id,
+                )
+
+        except Exception:
+            logger.exception("Error downloading starting goalies")
+            if active_download:
+                active_download.items_failed = 1
+            await db.execute(
+                "UPDATE import_batches SET items_failed = 1 WHERE batch_id = $1",
+                batch_id,
+            )
 
     async def _download_schedule(
         self,

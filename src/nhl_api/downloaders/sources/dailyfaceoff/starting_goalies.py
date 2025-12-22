@@ -36,7 +36,11 @@ from nhl_api.downloaders.sources.dailyfaceoff.team_mapping import (
 )
 
 if TYPE_CHECKING:
+    from datetime import date
+
     from bs4 import BeautifulSoup
+
+    from nhl_api.services.db import DatabaseService
 
 logger = logging.getLogger(__name__)
 
@@ -556,6 +560,90 @@ class StartingGoaliesDownloader(BaseDailyFaceoffDownloader):
             "gaa": start.gaa,
             "shutouts": start.shutouts,
         }
+
+    async def persist(
+        self,
+        db: DatabaseService,
+        goalie_data: dict[str, Any],
+        game_date: date,
+    ) -> int:
+        """Persist starting goalies to the database.
+
+        Uses upsert (INSERT ... ON CONFLICT) to handle re-downloads gracefully.
+
+        Args:
+            db: Database service instance
+            goalie_data: Parsed goalie dictionary from download_tonight()
+            game_date: Date of the games
+
+        Returns:
+            Number of goalie starts upserted
+        """
+        count = 0
+        fetched_at = datetime.fromisoformat(
+            goalie_data.get("fetched_at", datetime.now(UTC).isoformat())
+        )
+
+        for start in goalie_data.get("starts", []):
+            if not start.get("goalie_name"):
+                continue
+
+            # Parse game_time if available
+            game_time = None
+            if start.get("game_time"):
+                try:
+                    game_time = datetime.fromisoformat(start["game_time"])
+                except (ValueError, TypeError):
+                    pass
+
+            await db.execute(
+                """
+                INSERT INTO df_starting_goalies (
+                    game_date, fetched_at,
+                    team_abbrev, opponent_abbrev, is_home, game_time,
+                    goalie_name, df_goalie_id, confirmation_status,
+                    wins, losses, otl, save_pct, gaa, shutouts
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                ON CONFLICT (game_date, team_abbrev, goalie_name)
+                DO UPDATE SET
+                    fetched_at = EXCLUDED.fetched_at,
+                    opponent_abbrev = EXCLUDED.opponent_abbrev,
+                    is_home = EXCLUDED.is_home,
+                    game_time = EXCLUDED.game_time,
+                    df_goalie_id = EXCLUDED.df_goalie_id,
+                    confirmation_status = EXCLUDED.confirmation_status,
+                    wins = EXCLUDED.wins,
+                    losses = EXCLUDED.losses,
+                    otl = EXCLUDED.otl,
+                    save_pct = EXCLUDED.save_pct,
+                    gaa = EXCLUDED.gaa,
+                    shutouts = EXCLUDED.shutouts,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                game_date,
+                fetched_at,
+                start.get("team_abbreviation"),
+                start.get("opponent_abbreviation"),
+                start.get("is_home"),
+                game_time,
+                start.get("goalie_name"),
+                start.get("goalie_id"),
+                start.get("status"),
+                start.get("wins"),
+                start.get("losses"),
+                start.get("otl"),
+                start.get("save_pct"),
+                start.get("gaa"),
+                start.get("shutouts"),
+            )
+            count += 1
+
+        logger.debug(
+            "Persisted %d starting goalies for %s",
+            count,
+            game_date,
+        )
+        return count
 
 
 def create_starting_goalies_downloader(

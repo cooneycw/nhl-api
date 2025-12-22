@@ -26,7 +26,7 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from bs4 import BeautifulSoup, Tag
 
@@ -38,6 +38,11 @@ from nhl_api.downloaders.base.protocol import (
 from nhl_api.downloaders.sources.dailyfaceoff.base_dailyfaceoff_downloader import (
     BaseDailyFaceoffDownloader,
 )
+
+if TYPE_CHECKING:
+    from datetime import date
+
+    from nhl_api.services.db import DatabaseService
 
 logger = logging.getLogger(__name__)
 
@@ -839,3 +844,82 @@ class InjuryDownloader(BaseDailyFaceoffDownloader):
             "player_id": injury.player_id,
             "updated_at": injury.updated_at.isoformat() if injury.updated_at else None,
         }
+
+    async def persist(
+        self,
+        db: DatabaseService,
+        injury_data: dict[str, Any],
+        season_id: int,
+        snapshot_date: date,
+    ) -> int:
+        """Persist injuries to the database.
+
+        Uses upsert (INSERT ... ON CONFLICT) to handle re-downloads gracefully.
+
+        Args:
+            db: Database service instance
+            injury_data: Parsed injury dictionary from download_team()
+            season_id: NHL season ID (e.g., 20242025)
+            snapshot_date: Date of the snapshot
+
+        Returns:
+            Number of injuries upserted
+        """
+        count = 0
+        team_abbrev = injury_data.get("team_abbreviation", "")
+        fetched_at = datetime.fromisoformat(
+            injury_data.get("fetched_at", datetime.now(UTC).isoformat())
+        )
+
+        for injury in injury_data.get("injuries", []):
+            if not injury.get("player_name"):
+                continue
+
+            # Parse df_updated_at if available
+            df_updated_at = None
+            if injury.get("updated_at"):
+                try:
+                    df_updated_at = datetime.fromisoformat(injury["updated_at"])
+                except (ValueError, TypeError):
+                    pass
+
+            await db.execute(
+                """
+                INSERT INTO df_injuries (
+                    team_abbrev, season_id, snapshot_date, fetched_at,
+                    player_name, df_player_id,
+                    injury_type, injury_status, expected_return, injury_details,
+                    df_updated_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                ON CONFLICT (team_abbrev, snapshot_date, player_name)
+                DO UPDATE SET
+                    fetched_at = EXCLUDED.fetched_at,
+                    df_player_id = EXCLUDED.df_player_id,
+                    injury_type = EXCLUDED.injury_type,
+                    injury_status = EXCLUDED.injury_status,
+                    expected_return = EXCLUDED.expected_return,
+                    injury_details = EXCLUDED.injury_details,
+                    df_updated_at = EXCLUDED.df_updated_at,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                team_abbrev,
+                season_id,
+                snapshot_date,
+                fetched_at,
+                injury.get("player_name"),
+                injury.get("player_id"),
+                injury.get("injury_type"),
+                injury.get("status"),
+                injury.get("expected_return"),
+                injury.get("details"),
+                df_updated_at,
+            )
+            count += 1
+
+        logger.debug(
+            "Persisted %d injuries for %s on %s",
+            count,
+            team_abbrev,
+            snapshot_date,
+        )
+        return count

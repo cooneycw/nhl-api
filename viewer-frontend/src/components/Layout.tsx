@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { Activity, Download, Users, Calendar, CheckCircle, Shield, Menu, Fuel, HelpCircle } from 'lucide-react'
+import { Activity, Download, Users, Calendar, CheckCircle, Shield, Menu, Fuel, HelpCircle, LayoutList, Stethoscope } from 'lucide-react'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import {
@@ -19,6 +19,8 @@ const navigation = [
   { name: 'Games', href: '/games', icon: Calendar },
   { name: 'Teams', href: '/teams', icon: Shield },
   { name: 'Players', href: '/players', icon: Users },
+  { name: 'Lineups', href: '/lineups', icon: LayoutList },
+  { name: 'Injuries', href: '/injuries', icon: Stethoscope },
   { name: 'Validation', href: '/validation', icon: CheckCircle },
   { name: 'Help', href: '/help', icon: HelpCircle },
 ]

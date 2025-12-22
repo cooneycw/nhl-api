@@ -11,6 +11,8 @@ import { Teams } from '@/pages/Teams'
 import { TeamDetail } from '@/pages/TeamDetail'
 import { Validation } from '@/pages/Validation'
 import { GameReconciliation } from '@/pages/GameReconciliation'
+import { Lineups } from '@/pages/Lineups'
+import { Injuries } from '@/pages/Injuries'
 import { Help } from '@/pages/Help'
 
 function App() {
@@ -27,6 +29,8 @@ function App() {
           <Route path="games/:gameId" element={<GameDetail />} />
           <Route path="teams" element={<Teams />} />
           <Route path="teams/:teamId" element={<TeamDetail />} />
+          <Route path="lineups" element={<Lineups />} />
+          <Route path="injuries" element={<Injuries />} />
           <Route path="validation" element={<Validation />} />
           <Route path="validation/game/:gameId" element={<GameReconciliation />} />
           <Route path="help" element={<Help />} />

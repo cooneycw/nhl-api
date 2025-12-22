@@ -241,3 +241,125 @@ export interface CoverageResponse {
   seasons: SeasonCoverage[]
   refreshed_at: string | null
 }
+
+// DailyFaceoff types
+export interface PlayerLineupEntry {
+  player_name: string
+  player_id: number | null
+  jersey_number: number | null
+  position_code: string
+  injury_status: string | null
+}
+
+export interface ForwardLineResponse {
+  line_number: number
+  lw: PlayerLineupEntry | null
+  c: PlayerLineupEntry | null
+  rw: PlayerLineupEntry | null
+}
+
+export interface DefensePairResponse {
+  pair_number: number
+  ld: PlayerLineupEntry | null
+  rd: PlayerLineupEntry | null
+}
+
+export interface GoalieDepthResponse {
+  starter: PlayerLineupEntry | null
+  backup: PlayerLineupEntry | null
+}
+
+export interface TeamLineCombinationsResponse {
+  team_abbrev: string
+  snapshot_date: string
+  forward_lines: ForwardLineResponse[]
+  defense_pairs: DefensePairResponse[]
+  goalies: GoalieDepthResponse
+}
+
+export interface PowerPlayPlayerEntry {
+  player_name: string
+  player_id: number | null
+  jersey_number: number | null
+  position_code: string
+  df_rating: number | null
+  season_goals: number | null
+  season_assists: number | null
+  season_points: number | null
+}
+
+export interface PowerPlayUnitResponse {
+  unit_number: number
+  players: PowerPlayPlayerEntry[]
+}
+
+export interface TeamPowerPlayResponse {
+  team_abbrev: string
+  snapshot_date: string
+  pp1: PowerPlayUnitResponse | null
+  pp2: PowerPlayUnitResponse | null
+}
+
+export interface PenaltyKillPlayerEntry {
+  player_name: string
+  player_id: number | null
+  jersey_number: number | null
+  position_type: string
+}
+
+export interface PenaltyKillUnitResponse {
+  unit_number: number
+  forwards: PenaltyKillPlayerEntry[]
+  defensemen: PenaltyKillPlayerEntry[]
+}
+
+export interface TeamPenaltyKillResponse {
+  team_abbrev: string
+  snapshot_date: string
+  pk1: PenaltyKillUnitResponse | null
+  pk2: PenaltyKillUnitResponse | null
+}
+
+export interface InjuryEntry {
+  player_name: string
+  player_id: number | null
+  team_abbrev: string
+  injury_type: string | null
+  injury_status: string
+  expected_return: string | null
+  injury_details: string | null
+}
+
+export interface TeamInjuriesResponse {
+  team_abbrev: string
+  snapshot_date: string
+  injuries: InjuryEntry[]
+  injury_count: number
+}
+
+export interface LeagueInjuriesResponse {
+  snapshot_date: string
+  teams: Record<string, InjuryEntry[]>
+  total_injuries: number
+}
+
+export interface StartingGoalieEntry {
+  goalie_name: string
+  goalie_id: number | null
+  team_abbrev: string
+  opponent_abbrev: string
+  is_home: boolean
+  confirmation_status: string
+  wins: number | null
+  losses: number | null
+  otl: number | null
+  save_pct: number | null
+  gaa: number | null
+  shutouts: number | null
+}
+
+export interface TodaysStartersResponse {
+  game_date: string
+  starters: StartingGoalieEntry[]
+  game_count: number
+}
