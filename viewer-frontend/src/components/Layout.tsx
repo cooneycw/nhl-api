@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { Activity, Download, Users, Calendar, CheckCircle, Shield, Menu, Fuel } from 'lucide-react'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -65,8 +66,8 @@ export function Layout() {
             <NavLinks />
           </nav>
 
-          {/* Backend API link (desktop) */}
-          <div className="hidden md:flex ml-auto">
+          {/* Backend API link and theme toggle (desktop) */}
+          <div className="hidden md:flex ml-auto items-center space-x-2">
             <a
               href="http://localhost:8000"
               target="_blank"
@@ -75,6 +76,7 @@ export function Layout() {
             >
               API Docs ↗
             </a>
+            <ThemeToggle />
           </div>
 
           {/* Mobile menu button */}
@@ -105,6 +107,10 @@ export function Layout() {
                   >
                     <span>API Docs ↗</span>
                   </a>
+                  <div className="flex items-center justify-between py-3">
+                    <span className="text-base text-foreground/60">Theme</span>
+                    <ThemeToggle />
+                  </div>
                 </nav>
               </SheetContent>
             </Sheet>
