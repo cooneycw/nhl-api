@@ -468,11 +468,14 @@ async def cleanup_failed_batches(
     downloads_deleted = (
         await db.fetchval(
             """
-        DELETE FROM download_progress
-        WHERE batch_id IN (
-            SELECT batch_id FROM import_batches WHERE status = 'failed'
+        WITH deleted AS (
+            DELETE FROM download_progress
+            WHERE batch_id IN (
+                SELECT batch_id FROM import_batches WHERE status = 'failed'
+            )
+            RETURNING 1
         )
-        RETURNING COUNT(*)
+        SELECT COUNT(*) FROM deleted
         """
         )
         or 0
@@ -482,9 +485,12 @@ async def cleanup_failed_batches(
     batches_deleted = (
         await db.fetchval(
             """
-        DELETE FROM import_batches
-        WHERE status = 'failed'
-        RETURNING COUNT(*)
+        WITH deleted AS (
+            DELETE FROM import_batches
+            WHERE status = 'failed'
+            RETURNING 1
+        )
+        SELECT COUNT(*) FROM deleted
         """
         )
         or 0
@@ -495,13 +501,16 @@ async def cleanup_failed_batches(
         old_downloads = (
             await db.fetchval(
                 """
-            DELETE FROM download_progress
-            WHERE batch_id IN (
-                SELECT batch_id FROM import_batches
-                WHERE status = 'completed'
-                  AND completed_at < NOW() - INTERVAL '1 day' * $1
+            WITH deleted AS (
+                DELETE FROM download_progress
+                WHERE batch_id IN (
+                    SELECT batch_id FROM import_batches
+                    WHERE status = 'completed'
+                      AND completed_at < NOW() - INTERVAL '1 day' * $1
+                )
+                RETURNING 1
             )
-            RETURNING COUNT(*)
+            SELECT COUNT(*) FROM deleted
             """,
                 retention_days,
             )
@@ -512,10 +521,13 @@ async def cleanup_failed_batches(
         old_batches = (
             await db.fetchval(
                 """
-            DELETE FROM import_batches
-            WHERE status = 'completed'
-              AND completed_at < NOW() - INTERVAL '1 day' * $1
-            RETURNING COUNT(*)
+            WITH deleted AS (
+                DELETE FROM import_batches
+                WHERE status = 'completed'
+                  AND completed_at < NOW() - INTERVAL '1 day' * $1
+                RETURNING 1
+            )
+            SELECT COUNT(*) FROM deleted
             """,
                 retention_days,
             )
