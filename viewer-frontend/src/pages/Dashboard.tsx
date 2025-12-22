@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useHealth } from '@/hooks/useApi'
 import { Activity, Database, Clock, CheckCircle, XCircle } from 'lucide-react'
+import { SourceHealthGrid } from '@/components/monitoring'
 
 export function Dashboard() {
   const { data: health, isLoading, error } = useHealth()
@@ -94,36 +95,23 @@ export function Dashboard() {
         </Card>
       </div>
 
-      {/* Placeholder sections for future implementation */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Active Downloads</CardTitle>
-            <CardDescription>
-              Real-time download progress will appear here
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex h-[200px] items-center justify-center text-muted-foreground">
-              <p>Waiting for Monitoring API (#43)</p>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Active Downloads placeholder */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Active Downloads</CardTitle>
+          <CardDescription>
+            Real-time download progress will appear here
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex h-[200px] items-center justify-center text-muted-foreground">
+            <p>Coming soon (#167)</p>
+          </div>
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Source Health</CardTitle>
-            <CardDescription>
-              Status of each data source
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex h-[200px] items-center justify-center text-muted-foreground">
-              <p>Waiting for Monitoring API (#43)</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Source Health Grid */}
+      <SourceHealthGrid />
     </div>
   )
 }

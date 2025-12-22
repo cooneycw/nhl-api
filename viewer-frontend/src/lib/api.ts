@@ -73,10 +73,31 @@ export interface BatchSummary {
 }
 
 export interface SourceHealth {
-  source: string
-  status: 'healthy' | 'degraded' | 'down'
-  last_success: string
-  error_count: number
+  source_id: number
+  source_name: string
+  source_type: string
+  is_active: boolean
+  rate_limit_ms: number | null
+  max_concurrent: number | null
+  latest_batch_id: number | null
+  latest_status: string | null
+  latest_started_at: string | null
+  latest_completed_at: string | null
+  batches_last_24h: number
+  items_last_24h: number
+  success_last_24h: number
+  failed_last_24h: number
+  success_rate_24h: number | null
+  total_batches: number
+  total_items_all_time: number
+  success_items_all_time: number
+  health_status: 'healthy' | 'degraded' | 'error' | 'running' | 'inactive' | 'unknown'
+  refreshed_at: string | null
+}
+
+export interface SourceListResponse {
+  sources: SourceHealth[]
+  total: number
 }
 
 export interface PlayerSummary {
