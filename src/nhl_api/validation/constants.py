@@ -48,3 +48,8 @@ SOURCE_HTML_GS = "html_game_summary"
 SOURCE_HTML_FS = "html_faceoff_summary"
 SOURCE_HTML_SS = "html_shot_summary"
 SOURCE_HTML_TOI = "html_time_on_ice"
+
+# Cross-source validation
+SOURCE_CROSS = "cross_source"
+CROSS_SOURCE_SHOT_TOLERANCE = 2  # Allow +/-2 shots between PBP and Boxscore
+CROSS_SOURCE_SHIFT_COUNT_TOLERANCE = 1  # Allow +/-1 shift difference
