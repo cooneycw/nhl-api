@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 
 from nhl_api.services.db import DatabaseService
 from nhl_api.viewer.config import get_settings
@@ -123,15 +124,194 @@ def create_app() -> FastAPI:
     app.include_router(reconciliation.router, prefix=f"/api/{settings.api_version}")
     app.include_router(validation.router, prefix=f"/api/{settings.api_version}")
 
-    # Root endpoint
-    @app.get("/")
-    async def root() -> dict[str, str]:
-        """Root endpoint with API information."""
-        return {
-            "name": settings.api_title,
-            "version": settings.api_version,
-            "docs": "/docs",
-        }
+    # Root endpoint - HTML landing page with navbar
+    @app.get("/", response_class=HTMLResponse)
+    async def root() -> str:
+        """Root endpoint with navigation page."""
+        return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{settings.api_title}</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+            min-height: 100vh;
+            color: #e2e8f0;
+        }}
+        nav {{
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 0 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }}
+        .nav-container {{
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            height: 60px;
+            gap: 2rem;
+        }}
+        .logo {{
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #60a5fa;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }}
+        .nav-links {{
+            display: flex;
+            gap: 0.5rem;
+            list-style: none;
+        }}
+        .nav-links a {{
+            color: #94a3b8;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }}
+        .nav-links a:hover {{
+            background: rgba(96, 165, 250, 0.1);
+            color: #60a5fa;
+        }}
+        .nav-links a.active {{
+            background: rgba(96, 165, 250, 0.2);
+            color: #60a5fa;
+        }}
+        main {{
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+        }}
+        h1 {{
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: #f1f5f9;
+        }}
+        .subtitle {{
+            color: #94a3b8;
+            margin-bottom: 3rem;
+            font-size: 1.1rem;
+        }}
+        .cards {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }}
+        .card {{
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-decoration: none;
+            transition: all 0.3s;
+        }}
+        .card:hover {{
+            transform: translateY(-4px);
+            border-color: rgba(96, 165, 250, 0.5);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }}
+        .card h3 {{
+            color: #60a5fa;
+            margin-bottom: 0.5rem;
+            font-size: 1.2rem;
+        }}
+        .card p {{
+            color: #94a3b8;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }}
+        .badge {{
+            display: inline-block;
+            background: rgba(96, 165, 250, 0.2);
+            color: #60a5fa;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            margin-top: 1rem;
+        }}
+        .external {{ color: #a78bfa; }}
+        .external .badge {{ background: rgba(167, 139, 250, 0.2); color: #a78bfa; }}
+        footer {{
+            text-align: center;
+            padding: 2rem;
+            color: #64748b;
+            font-size: 0.85rem;
+        }}
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-container">
+            <a href="/" class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+                NHL Data Viewer
+            </a>
+            <ul class="nav-links">
+                <li><a href="/" class="active">Home</a></li>
+                <li><a href="/docs">API Docs</a></li>
+                <li><a href="/redoc">ReDoc</a></li>
+                <li><a href="/health">Health</a></li>
+                <li><a href="http://localhost:5173" target="_blank">Frontend ↗</a></li>
+            </ul>
+        </div>
+    </nav>
+    <main>
+        <h1>{settings.api_title}</h1>
+        <p class="subtitle">{settings.api_description} &bull; Version {settings.api_version}</p>
+        <div class="cards">
+            <a href="/docs" class="card">
+                <h3>Swagger UI</h3>
+                <p>Interactive API documentation with try-it-out functionality. Test endpoints directly in your browser.</p>
+                <span class="badge">OpenAPI 3.0</span>
+            </a>
+            <a href="/redoc" class="card">
+                <h3>ReDoc</h3>
+                <p>Clean, readable API reference documentation. Great for sharing with team members.</p>
+                <span class="badge">Reference Docs</span>
+            </a>
+            <a href="/health" class="card">
+                <h3>Health Check</h3>
+                <p>Monitor service status, database connectivity, and uptime metrics.</p>
+                <span class="badge">JSON</span>
+            </a>
+            <a href="/openapi.json" class="card">
+                <h3>OpenAPI Spec</h3>
+                <p>Raw OpenAPI specification for code generation and tooling integration.</p>
+                <span class="badge">JSON Schema</span>
+            </a>
+            <a href="http://localhost:5173" target="_blank" class="card external">
+                <h3>Frontend Dashboard ↗</h3>
+                <p>React-based data viewer with download management, game stats, and player information.</p>
+                <span class="badge">Port 5173</span>
+            </a>
+            <a href="http://localhost:5173/downloads" target="_blank" class="card external">
+                <h3>Download Manager ↗</h3>
+                <p>Trigger and monitor data downloads from NHL API sources.</p>
+                <span class="badge">Port 5173</span>
+            </a>
+        </div>
+    </main>
+    <footer>
+        NHL Data Viewer Backend &bull; FastAPI {settings.api_version}
+    </footer>
+</body>
+</html>
+"""
 
     # API info endpoint
     @app.get(f"/api/{settings.api_version}/info")
