@@ -57,6 +57,7 @@ class DownloadStartRequest(BaseModel):
 
     season_ids: list[int]
     source_names: list[str]  # e.g., ["nhl_schedule", "nhl_boxscore"]
+    game_types: list[int] = [2]  # 1=pre, 2=regular (default), 3=playoffs
     force: bool = False  # Re-download even if already completed
 
 
