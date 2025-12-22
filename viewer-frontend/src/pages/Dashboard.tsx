@@ -1,9 +1,9 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useHealth } from '@/hooks/useApi'
 import { Activity, Database, Clock, CheckCircle, XCircle } from 'lucide-react'
-import { ProgressChart, DashboardStats, SourceHealthGrid, FailureTable } from '@/components/monitoring'
+import { ProgressChart, DashboardStats, SourceHealthGrid, FailureTable, ActiveBatches } from '@/components/monitoring'
 
 export function Dashboard() {
   const { data: health, isLoading, error } = useHealth()
@@ -111,20 +111,8 @@ export function Dashboard() {
         <DashboardStats />
       </div>
 
-      {/* Active Downloads placeholder */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Active Downloads</CardTitle>
-          <CardDescription>
-            Real-time download progress will appear here
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex h-[200px] items-center justify-center text-muted-foreground">
-            <p>Coming soon (#167)</p>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Active Downloads (#167) */}
+      <ActiveBatches />
 
       {/* Progress Chart (#170) */}
       <ProgressChart />
