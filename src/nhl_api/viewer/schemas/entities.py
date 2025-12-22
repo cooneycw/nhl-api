@@ -5,10 +5,10 @@ Defines request/response models for players, teams, and games.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 # =============================================================================
 # Pagination
@@ -165,7 +165,7 @@ class GameSummary(BaseModel):
     game_type: str
     game_type_name: str | None = None
     game_date: date
-    game_time: str | None = None
+    game_time: time | str | None = None
     venue_name: str | None = None
     home_team_id: int
     home_team_name: str
@@ -180,6 +180,15 @@ class GameSummary(BaseModel):
     is_shootout: bool = False
     winner_abbr: str | None = None
 
+    @field_serializer("game_time")
+    def serialize_game_time(self, value: time | str | None) -> str | None:
+        """Serialize time objects to HH:MM:SS string format."""
+        if value is None:
+            return None
+        if isinstance(value, time):
+            return value.strftime("%H:%M:%S")
+        return value
+
 
 class GameDetail(BaseModel):
     """Detailed game information."""
@@ -190,7 +199,7 @@ class GameDetail(BaseModel):
     game_type: str
     game_type_name: str | None = None
     game_date: date
-    game_time: str | None = None
+    game_time: time | str | None = None
     venue_id: int | None = None
     venue_name: str | None = None
     venue_city: str | None = None
@@ -213,6 +222,15 @@ class GameDetail(BaseModel):
     attendance: int | None = None
     game_duration_minutes: int | None = None
     updated_at: datetime | None = None
+
+    @field_serializer("game_time")
+    def serialize_game_time(self, value: time | str | None) -> str | None:
+        """Serialize time objects to HH:MM:SS string format."""
+        if value is None:
+            return None
+        if isinstance(value, time):
+            return value.strftime("%H:%M:%S")
+        return value
 
 
 class GameListResponse(BaseModel):
