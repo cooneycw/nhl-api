@@ -197,3 +197,25 @@ class SourceListResponse(BaseModel):
 
     sources: list[SourceHealth]
     total: int
+
+
+# =============================================================================
+# Timeseries
+# =============================================================================
+
+
+class TimeseriesDataPoint(BaseModel):
+    """Single data point in timeseries."""
+
+    timestamp: datetime
+    success_count: int
+    failure_count: int
+    total_count: int
+
+
+class TimeseriesResponse(BaseModel):
+    """Timeseries data for progress chart."""
+
+    period: str  # "24h", "7d", "30d"
+    data: list[TimeseriesDataPoint]
+    generated_at: datetime

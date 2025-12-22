@@ -153,6 +153,22 @@ export interface PaginatedResponse<T> {
   pages: number
 }
 
+// Timeseries types
+export type TimeseriesPeriod = '24h' | '7d' | '30d'
+
+export interface TimeseriesDataPoint {
+  timestamp: string
+  success_count: number
+  failure_count: number
+  total_count: number
+}
+
+export interface TimeseriesResponse {
+  period: TimeseriesPeriod
+  data: TimeseriesDataPoint[]
+  generated_at: string
+}
+
 // Failure types
 export interface FailedDownload {
   progress_id: number

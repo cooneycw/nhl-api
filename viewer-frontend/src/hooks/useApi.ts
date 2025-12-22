@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, fetchHealth, type DashboardResponse, type BatchSummary, type SourceListResponse, type FailureListResponse, type RetryResponse } from '@/lib/api'
+import { api, fetchHealth, type DashboardResponse, type BatchSummary, type SourceListResponse, type FailureListResponse, type RetryResponse, type TimeseriesResponse, type TimeseriesPeriod } from '@/lib/api'
 
 // Health check - uses /health endpoint directly (not under /api/v1)
 export function useHealth() {
@@ -62,5 +62,14 @@ export function useRetryDownload() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['monitoring'] })
     },
+  })
+}
+
+// Download activity timeseries
+export function useDownloadTimeSeries(period: TimeseriesPeriod = '24h') {
+  return useQuery({
+    queryKey: ['monitoring', 'timeseries', period],
+    queryFn: () => api.get<TimeseriesResponse>('/monitoring/timeseries', { period }),
+    refetchInterval: 60000, // Refresh every minute
   })
 }

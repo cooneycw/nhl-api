@@ -30,6 +30,8 @@ from nhl_api.viewer.schemas.monitoring import (
     RetryResponse,
     SourceHealth,
     SourceListResponse,
+    TimeseriesDataPoint,
+    TimeseriesResponse,
 )
 
 # Type alias for dependency injection
@@ -509,4 +511,80 @@ async def list_sources(
     return SourceListResponse(
         sources=sources,
         total=len(sources),
+    )
+
+
+# =============================================================================
+# Timeseries Endpoint
+# =============================================================================
+
+
+@router.get(
+    "/timeseries",
+    response_model=TimeseriesResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Download Activity Timeseries",
+    description="Get time-bucketed download activity for progress charts",
+)
+async def get_timeseries(
+    db: DbDep,
+    period: str = Query(
+        default="24h",
+        regex="^(24h|7d|30d)$",
+        description="Time period: 24h (hourly), 7d (daily), 30d (daily)",
+    ),
+) -> TimeseriesResponse:
+    """Get timeseries data for download activity visualization.
+
+    Returns success/failure counts bucketed by time interval:
+    - 24h: hourly buckets for the last 24 hours
+    - 7d: daily buckets for the last 7 days
+    - 30d: daily buckets for the last 30 days
+    """
+    # Determine interval and lookback based on period
+    if period == "24h":
+        interval = "hour"
+        lookback = "24 hours"
+    elif period == "7d":
+        interval = "day"
+        lookback = "7 days"
+    else:  # 30d
+        interval = "day"
+        lookback = "30 days"
+
+    # Query with time bucketing using date_trunc
+    rows = await db.fetch(
+        f"""
+        WITH time_buckets AS (
+            SELECT
+                date_trunc($1, dp.completed_at) AS bucket,
+                COUNT(*) FILTER (WHERE dp.status = 'success') AS success_count,
+                COUNT(*) FILTER (WHERE dp.status = 'failed') AS failure_count,
+                COUNT(*) AS total_count
+            FROM download_progress dp
+            WHERE dp.completed_at >= NOW() - INTERVAL '{lookback}'
+              AND dp.completed_at IS NOT NULL
+            GROUP BY date_trunc($1, dp.completed_at)
+        )
+        SELECT bucket, success_count, failure_count, total_count
+        FROM time_buckets
+        ORDER BY bucket ASC
+        """,
+        interval,
+    )
+
+    data = [
+        TimeseriesDataPoint(
+            timestamp=row["bucket"],
+            success_count=row["success_count"] or 0,
+            failure_count=row["failure_count"] or 0,
+            total_count=row["total_count"] or 0,
+        )
+        for row in rows
+    ]
+
+    return TimeseriesResponse(
+        period=period,
+        data=data,
+        generated_at=datetime.now(UTC),
     )
