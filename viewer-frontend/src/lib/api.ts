@@ -47,10 +47,27 @@ export const api = {
 }
 
 // API response types
+export interface DatabaseHealth {
+  connected: boolean
+  latency_ms: number
+  error: string | null
+}
+
 export interface HealthResponse {
   status: string
-  database: string
+  version: string
+  uptime_seconds: number
   timestamp: string
+  database: DatabaseHealth
+}
+
+// Fetch health from /health endpoint (not under /api/v1)
+export async function fetchHealth(): Promise<HealthResponse> {
+  const response = await fetch('/health')
+  if (!response.ok) {
+    throw new ApiError(response.status, response.statusText)
+  }
+  return response.json()
 }
 
 export interface DashboardStats {

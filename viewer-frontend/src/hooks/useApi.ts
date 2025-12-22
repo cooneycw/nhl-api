@@ -1,11 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, type HealthResponse, type DashboardResponse, type BatchSummary, type SourceListResponse, type FailureListResponse, type RetryResponse } from '@/lib/api'
+import { api, fetchHealth, type DashboardResponse, type BatchSummary, type SourceListResponse, type FailureListResponse, type RetryResponse } from '@/lib/api'
 
-// Health check
+// Health check - uses /health endpoint directly (not under /api/v1)
 export function useHealth() {
   return useQuery({
     queryKey: ['health'],
-    queryFn: () => api.get<HealthResponse>('/health'),
+    queryFn: fetchHealth,
     refetchInterval: 30000, // 30 seconds
   })
 }
