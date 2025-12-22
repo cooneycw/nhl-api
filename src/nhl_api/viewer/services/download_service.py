@@ -403,7 +403,9 @@ class DownloadService:
         active_download: ActiveDownloadTask | None,
     ) -> None:
         """Download schedule for a season."""
-        games = await downloader.get_season_schedule(season_id)
+        # Filter to regular season games only (game_type=2) to avoid
+        # preseason/all-star games with non-standard team IDs (e.g., 7509)
+        games = await downloader.get_season_schedule(season_id, game_type=2)
 
         if active_download:
             active_download.items_total = len(games)
