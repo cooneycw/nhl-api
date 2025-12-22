@@ -49,6 +49,9 @@ class ActiveDownloadTask:
     season_id: int
     started_at: datetime
     task: asyncio.Task[None]
+    game_types: list[int] = field(
+        default_factory=lambda: [2]
+    )  # Default: regular season
     cancel_requested: bool = False
     items_total: int | None = None
     items_completed: int = 0
@@ -80,6 +83,7 @@ class DownloadService:
         db: DatabaseService,
         source_name: str,
         season_id: int,
+        game_types: list[int] | None = None,
         force: bool = False,
     ) -> int:
         """Start a download for a specific source and season.
@@ -88,11 +92,14 @@ class DownloadService:
             db: Database service
             source_name: Name of the data source (e.g., "nhl_schedule")
             season_id: Season ID (e.g., 20242025)
+            game_types: Game types to include (1=pre, 2=regular, 3=playoffs)
             force: Re-download even if already completed
 
         Returns:
             batch_id of the created download batch
         """
+        if game_types is None:
+            game_types = [2]  # Default to regular season only
         # Get source info from database
         source_row = await db.fetchrow(
             "SELECT source_id, source_type FROM data_sources WHERE name = $1",
@@ -125,7 +132,9 @@ class DownloadService:
 
         # Create and start async task
         task = asyncio.create_task(
-            self._run_download(db, batch_id, source_name, source_type, season_id, force)
+            self._run_download(
+                db, batch_id, source_name, source_type, season_id, game_types, force
+            )
         )
 
         # Track the active download
@@ -137,6 +146,7 @@ class DownloadService:
             season_id=season_id,
             started_at=datetime.now(UTC),
             task=task,
+            game_types=game_types,
         )
 
         return batch_id
@@ -209,6 +219,7 @@ class DownloadService:
         source_name: str,
         source_type: str,
         season_id: int,
+        game_types: list[int],
         force: bool,
     ) -> None:
         """Execute the download for a specific source and season.
@@ -218,11 +229,11 @@ class DownloadService:
         try:
             if source_type == "nhl_json":
                 await self._run_nhl_json_download(
-                    db, batch_id, source_name, season_id, force
+                    db, batch_id, source_name, season_id, game_types, force
                 )
             elif source_type == "shift_chart":
                 await self._run_shift_chart_download(
-                    db, batch_id, source_name, season_id, force
+                    db, batch_id, source_name, season_id, game_types, force
                 )
             elif source_type == "html_report":
                 # HTML downloaders not yet implemented
@@ -252,6 +263,7 @@ class DownloadService:
         batch_id: int,
         source_name: str,
         season_id: int,
+        game_types: list[int],
         force: bool,
     ) -> None:
         """Run a download for an NHL JSON API source."""
@@ -288,11 +300,17 @@ class DownloadService:
             # Handle different downloader types
             if source_name == "nhl_schedule":
                 await self._download_schedule(
-                    db, batch_id, downloader, season_id, active_download
+                    db, batch_id, downloader, season_id, game_types, active_download
                 )
             elif source_name in ("nhl_boxscore", "nhl_pbp"):
                 await self._download_game_based(
-                    db, batch_id, downloader, season_id, active_download, source_name
+                    db,
+                    batch_id,
+                    downloader,
+                    season_id,
+                    game_types,
+                    active_download,
+                    source_name,
                 )
             elif source_name == "nhl_roster":
                 await self._download_rosters(
@@ -319,6 +337,7 @@ class DownloadService:
         batch_id: int,
         source_name: str,
         season_id: int,
+        game_types: list[int],
         force: bool,
     ) -> None:
         """Run a download for NHL Stats API shift charts."""
@@ -334,16 +353,18 @@ class DownloadService:
         schedule_config = DownloaderConfig(base_url=NHL_API_BASE_URL)
         schedule_dl = ScheduleDownloader(schedule_config)
         async with schedule_dl:
-            games = await schedule_dl.get_season_schedule(season_id)
+            all_games = await schedule_dl.get_season_schedule(season_id)
 
-        # Filter to only completed games
-        completed_games = [g for g in games if g.game_state in ("OFF", "FINAL")]
+        # Filter by game types first, then by completed status
+        type_filtered = [g for g in all_games if g.game_type in game_types]
+        completed_games = [g for g in type_filtered if g.game_state in ("OFF", "FINAL")]
         game_ids = [g.game_id for g in completed_games]
 
         logger.info(
-            "Downloading shift charts for %d completed games (filtered from %d total)",
+            "Downloading shift charts for %d completed games (game_types=%s, %d total)",
             len(game_ids),
-            len(games),
+            game_types,
+            len(all_games),
         )
 
         if active_download:
@@ -400,12 +421,20 @@ class DownloadService:
         batch_id: int,
         downloader: Any,
         season_id: int,
+        game_types: list[int],
         active_download: ActiveDownloadTask | None,
     ) -> None:
-        """Download schedule for a season."""
-        # Filter to regular season games only (game_type=2) to avoid
-        # preseason/all-star games with non-standard team IDs (e.g., 7509)
-        games = await downloader.get_season_schedule(season_id, game_type=2)
+        """Download schedule for a season, filtered by game types."""
+        # Fetch all games, then filter by game_types
+        all_games = await downloader.get_season_schedule(season_id)
+        games = [g for g in all_games if g.game_type in game_types]
+
+        logger.info(
+            "Filtered schedule: %d games matching game_types %s (from %d total)",
+            len(games),
+            game_types,
+            len(all_games),
+        )
 
         if active_download:
             active_download.items_total = len(games)
@@ -438,6 +467,7 @@ class DownloadService:
         batch_id: int,
         downloader: Any,
         season_id: int,
+        game_types: list[int],
         active_download: ActiveDownloadTask | None,
         source_name: str = "",
     ) -> None:
@@ -448,18 +478,20 @@ class DownloadService:
         schedule_config = DownloaderConfig(base_url=NHL_API_BASE_URL)
         schedule_dl = ScheduleDownloader(schedule_config)
         async with schedule_dl:
-            games = await schedule_dl.get_season_schedule(season_id)
+            all_games = await schedule_dl.get_season_schedule(season_id)
 
-        # Filter to only completed games - future games return 404 for boxscore/pbp
-        completed_games = [g for g in games if g.game_state in ("OFF", "FINAL")]
+        # Filter by game types first, then by completed status
+        type_filtered = [g for g in all_games if g.game_type in game_types]
+        completed_games = [g for g in type_filtered if g.game_state in ("OFF", "FINAL")]
         game_ids = [g.game_id for g in completed_games]
         downloader.set_game_ids(game_ids)
 
         logger.info(
-            "Downloading %s for %d completed games (filtered from %d total)",
+            "Downloading %s for %d completed games (game_types=%s, %d total in season)",
             source_name,
             len(game_ids),
-            len(games),
+            game_types,
+            len(all_games),
         )
 
         if active_download:

@@ -179,6 +179,7 @@ async def start_download(
                     db=db,
                     source_name=source_name,
                     season_id=season_id,
+                    game_types=request.game_types,
                     force=request.force,
                 )
                 batches.append(

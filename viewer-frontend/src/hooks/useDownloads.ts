@@ -53,6 +53,7 @@ interface ActiveDownloadsResponse {
 interface StartDownloadRequest {
   season_ids: number[]
   source_names: string[]
+  game_types?: number[]  // 1=pre, 2=regular, 3=playoffs
   force?: boolean
 }
 

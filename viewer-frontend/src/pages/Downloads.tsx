@@ -31,6 +31,13 @@ import { Download, X, Loader2, Play, AlertCircle, Trash2 } from 'lucide-react'
 // Excludes: quanthockey, dailyfaceoff
 const DEFAULT_SELECTED_SOURCE_TYPES = ['nhl_json', 'html_report', 'shift_chart']
 
+// Game types with labels
+const GAME_TYPES = [
+  { id: 1, label: 'Pre-season', description: 'Exhibition games before regular season' },
+  { id: 2, label: 'Regular Season', description: 'Standard 82-game season' },
+  { id: 3, label: 'Playoffs', description: 'Stanley Cup playoffs' },
+]
+
 export function Downloads() {
   const { data: options, isLoading: optionsLoading, error: optionsError } = useDownloadOptions()
   const { data: activeDownloads, isLoading: activeLoading } = useActiveDownloads()
@@ -40,6 +47,7 @@ export function Downloads() {
 
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>([])
   const [selectedSources, setSelectedSources] = useState<string[]>([])
+  const [selectedGameTypes, setSelectedGameTypes] = useState<number[]>([2]) // Default: Regular Season
   const [initialized, setInitialized] = useState(false)
   const [deletePreview, setDeletePreview] = useState<DeleteSeasonResponse | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -79,6 +87,14 @@ export function Downloads() {
     )
   }
 
+  const toggleGameType = (gameTypeId: number) => {
+    setSelectedGameTypes((prev) =>
+      prev.includes(gameTypeId)
+        ? prev.filter((t) => t !== gameTypeId)
+        : [...prev, gameTypeId]
+    )
+  }
+
   const selectAllInGroup = (group: SourceGroup) => {
     const groupSourceNames = group.sources.map((s) => s.name)
     const allSelected = groupSourceNames.every((name) => selectedSources.includes(name))
@@ -93,16 +109,18 @@ export function Downloads() {
   }
 
   const handleStartDownload = async () => {
-    if (selectedSeasons.length === 0 || selectedSources.length === 0) return
+    if (selectedSeasons.length === 0 || selectedSources.length === 0 || selectedGameTypes.length === 0) return
 
     try {
       await startDownload.mutateAsync({
         season_ids: selectedSeasons,
         source_names: selectedSources,
+        game_types: selectedGameTypes,
       })
-      // Clear selections after successful start
+      // Clear selections after successful start (but keep game types at default)
       setSelectedSeasons([])
       setSelectedSources([])
+      setSelectedGameTypes([2]) // Reset to Regular Season default
     } catch (error) {
       console.error('Failed to start download:', error)
     }
@@ -137,6 +155,7 @@ export function Downloads() {
   const canStartDownload =
     selectedSeasons.length > 0 &&
     selectedSources.length > 0 &&
+    selectedGameTypes.length > 0 &&
     !startDownload.isPending
 
   return (
@@ -156,6 +175,47 @@ export function Downloads() {
           </CardContent>
         </Card>
       )}
+
+      {/* Game Type Selection */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Game Types</CardTitle>
+          <CardDescription>Select which types of games to download (at least one required)</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-6">
+            {GAME_TYPES.map((gameType) => (
+              <div
+                key={gameType.id}
+                className="flex items-center space-x-3"
+              >
+                <Checkbox
+                  id={`gametype-${gameType.id}`}
+                  checked={selectedGameTypes.includes(gameType.id)}
+                  onCheckedChange={() => toggleGameType(gameType.id)}
+                />
+                <div className="grid gap-1.5 leading-none">
+                  <label
+                    htmlFor={`gametype-${gameType.id}`}
+                    className="text-sm font-medium leading-none cursor-pointer peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    {gameType.label}
+                    {gameType.id === 2 && (
+                      <Badge variant="secondary" className="ml-2">Default</Badge>
+                    )}
+                  </label>
+                  <p className="text-xs text-muted-foreground">{gameType.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          {selectedGameTypes.length === 0 && (
+            <p className="text-sm text-destructive mt-3">
+              At least one game type must be selected
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
         {/* Season Selection */}
@@ -273,15 +333,19 @@ export function Downloads() {
       {/* Start Download Button */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          {selectedSeasons.length > 0 && selectedSources.length > 0 ? (
+          {selectedSeasons.length > 0 && selectedSources.length > 0 && selectedGameTypes.length > 0 ? (
             <>
-              {selectedSeasons.length} season(s) × {selectedSources.length} source(s) ={' '}
+              {selectedSeasons.length} season(s) × {selectedSources.length} source(s) ×{' '}
+              {selectedGameTypes.length} game type(s) ={' '}
               <span className="font-medium">
                 {selectedSeasons.length * selectedSources.length} batch(es)
               </span>
+              <span className="ml-2 text-xs">
+                ({GAME_TYPES.filter(gt => selectedGameTypes.includes(gt.id)).map(gt => gt.label).join(', ')})
+              </span>
             </>
           ) : (
-            'Select at least one season and one source'
+            'Select at least one season, source, and game type'
           )}
         </div>
         <Button
