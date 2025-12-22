@@ -93,7 +93,9 @@ markers = [
     "unit: Unit tests (fast, no external dependencies)",
     "integration: Integration tests (may require external services)",
     "data_validation: Data validation tests (verify data integrity)",
+    "storage_validation: Storage stage validation tests (verify database persistence)",
     "live: Live tests against external services (require network, skipped by default)",
+    "live_db: Live database tests (require USE_REAL_DB=true environment variable)",
 ]
 
 # Ruff configuration (see issue #7 for full setup)
