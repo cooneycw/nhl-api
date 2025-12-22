@@ -36,6 +36,19 @@ from nhl_api.viewer.schemas.reconciliation import (
     ReconciliationGamesResponse,
     ReconciliationSummary,
 )
+from nhl_api.viewer.schemas.validation import (
+    DiscrepanciesResponse,
+    DiscrepancyDetail,
+    DiscrepancySummary,
+    QualityScore,
+    QualityScoresResponse,
+    ValidationResult,
+    ValidationRule,
+    ValidationRulesResponse,
+    ValidationRunDetail,
+    ValidationRunsResponse,
+    ValidationRunSummary,
+)
 
 __all__ = [
     # Downloads
@@ -71,4 +84,16 @@ __all__ = [
     "ReconciliationDashboardResponse",
     "ReconciliationGamesResponse",
     "ReconciliationSummary",
+    # Validation
+    "DiscrepanciesResponse",
+    "DiscrepancyDetail",
+    "DiscrepancySummary",
+    "QualityScore",
+    "QualityScoresResponse",
+    "ValidationResult",
+    "ValidationRule",
+    "ValidationRulesResponse",
+    "ValidationRunDetail",
+    "ValidationRunsResponse",
+    "ValidationRunSummary",
 ]
