@@ -301,6 +301,22 @@ class MockFaceoffStat:
         self.pct = pct
 
 
+class MockZoneFaceoffs:
+    """Mock zone faceoffs (offensive/defensive/neutral) for FS testing."""
+
+    def __init__(
+        self,
+        offensive: MockFaceoffStat | None = None,
+        defensive: MockFaceoffStat | None = None,
+        neutral: MockFaceoffStat | None = None,
+        total: MockFaceoffStat | None = None,
+    ):
+        self.offensive = offensive or MockFaceoffStat()
+        self.defensive = defensive or MockFaceoffStat()
+        self.neutral = neutral or MockFaceoffStat()
+        self.total = total or MockFaceoffStat()
+
+
 class MockPlayerFaceoffStats:
     """Mock player faceoff stats for FS testing."""
 
@@ -308,11 +324,11 @@ class MockPlayerFaceoffStats:
         self,
         number: int = 11,
         name: str = "Test Player",
-        totals: MockFaceoffStat | None = None,
+        totals: MockZoneFaceoffs | None = None,
     ):
         self.number = number
         self.name = name
-        self.totals = totals or MockFaceoffStat()
+        self.totals = totals or MockZoneFaceoffs()
 
 
 class MockTeamFaceoffSummary:
@@ -346,28 +362,42 @@ class TestFaceoffSummaryMathValidation:
 
     def test_faceoff_math_valid(self):
         """Wins + losses = total should pass."""
-        totals = MockFaceoffStat(won=5, lost=3, total=8)
-        player = MockPlayerFaceoffStats(totals=totals)
+        # Create valid stats for each zone
+        valid_stat = MockFaceoffStat(won=5, lost=3, total=8)
+        zone_totals = MockZoneFaceoffs(
+            offensive=valid_stat,
+            defensive=valid_stat,
+            neutral=valid_stat,
+        )
+        player = MockPlayerFaceoffStats(totals=zone_totals)
         home = MockTeamFaceoffSummary(players=[player])
         away = MockTeamFaceoffSummary(team_abbrev="TOR", players=[])
         fs = MockParsedFaceoffSummary(home_team=home, away_team=away)
         results = validate_faceoff_summary(fs)
         math_results = [r for r in results if r.rule_name == "fs_faceoff_math"]
-        assert len(math_results) == 1
-        assert math_results[0].passed is True
+        # 3 zones checked per player
+        assert len(math_results) == 3
+        assert all(r.passed for r in math_results)
 
     def test_faceoff_math_invalid(self):
         """Wins + losses != total should fail."""
-        totals = MockFaceoffStat(won=5, lost=3, total=10)  # Should be 8
-        player = MockPlayerFaceoffStats(totals=totals)
+        # Create invalid stat for offensive zone
+        invalid_stat = MockFaceoffStat(won=5, lost=3, total=10)  # Should be 8
+        valid_stat = MockFaceoffStat(won=5, lost=3, total=8)
+        zone_totals = MockZoneFaceoffs(
+            offensive=invalid_stat,
+            defensive=valid_stat,
+            neutral=valid_stat,
+        )
+        player = MockPlayerFaceoffStats(totals=zone_totals)
         home = MockTeamFaceoffSummary(players=[player])
         away = MockTeamFaceoffSummary(team_abbrev="TOR", players=[])
         fs = MockParsedFaceoffSummary(home_team=home, away_team=away)
         results = validate_faceoff_summary(fs)
         math_results = [r for r in results if r.rule_name == "fs_faceoff_math"]
-        assert len(math_results) == 1
-        assert math_results[0].passed is False
-        assert math_results[0].severity == "error"
+        failed = [r for r in math_results if not r.passed]
+        assert len(failed) == 1
+        assert failed[0].severity == "error"
 
     def test_empty_players(self):
         """Empty player list should pass (no validations)."""
@@ -531,13 +561,18 @@ class MockPlayerTOI:
         self,
         number: int = 11,
         name: str = "Test Player",
-        shifts: list | None = None,
-        total_toi: int | None = None,  # in seconds
+        shifts_detail: list | None = None,
+        total_toi: str | None = None,  # MM:SS format, None means no total
     ):
         self.number = number
         self.name = name
-        self.shifts = shifts or []
-        self.total_toi = total_toi
+        self.shifts_detail = shifts_detail or []
+        self._total_toi = total_toi
+
+    @property
+    def total_toi(self) -> str | None:
+        """Return total TOI as string or None."""
+        return self._total_toi
 
 
 class MockParsedTimeOnIce:
@@ -564,7 +599,7 @@ class TestTimeOnIceShiftDurationSumValidation:
             MockShiftInfo(shift_number=2, duration="1:00"),  # 60s
             MockShiftInfo(shift_number=3, duration="1:00"),  # 60s
         ]
-        player = MockPlayerTOI(shifts=shifts, total_toi=180)  # 3:00
+        player = MockPlayerTOI(shifts_detail=shifts, total_toi="3:00")  # 180s
         toi = MockParsedTimeOnIce(players=[player])
         results = validate_time_on_ice(toi)
         toi_results = [r for r in results if r.rule_name == "toi_shift_duration_sum"]
@@ -577,7 +612,9 @@ class TestTimeOnIceShiftDurationSumValidation:
             MockShiftInfo(shift_number=1, duration="1:00"),  # 60s
             MockShiftInfo(shift_number=2, duration="1:00"),  # 60s
         ]
-        player = MockPlayerTOI(shifts=shifts, total_toi=300)  # 5:00 (mismatch)
+        player = MockPlayerTOI(
+            shifts_detail=shifts, total_toi="5:00"
+        )  # 300s (mismatch)
         toi = MockParsedTimeOnIce(players=[player])
         results = validate_time_on_ice(toi)
         toi_results = [r for r in results if r.rule_name == "toi_shift_duration_sum"]
@@ -594,12 +631,13 @@ class TestTimeOnIceShiftDurationSumValidation:
         assert len(failed) == 0
 
     def test_no_total_toi(self):
-        """Player without total_toi should pass validation."""
+        """Player without total_toi should pass (nothing to validate against)."""
         shifts = [MockShiftInfo(shift_number=1, duration="1:00")]
-        player = MockPlayerTOI(shifts=shifts, total_toi=None)
+        player = MockPlayerTOI(shifts_detail=shifts, total_toi=None)
         toi = MockParsedTimeOnIce(players=[player])
         results = validate_time_on_ice(toi)
         toi_results = [r for r in results if r.rule_name == "toi_shift_duration_sum"]
+        # With total_toi=None, produces a pass result indicating nothing to validate
         assert len(toi_results) == 1
         assert toi_results[0].passed is True
 
