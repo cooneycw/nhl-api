@@ -781,10 +781,11 @@ class DownloadService:
         active_download: ActiveDownloadTask | None,
     ) -> None:
         """Download rosters for all teams and persist to database."""
-        from nhl_api.downloaders.sources.nhl_json import NHL_TEAM_ABBREVS
+        from nhl_api.downloaders.sources.nhl_json import get_teams_for_season
         from nhl_api.downloaders.sources.nhl_json.roster import ParsedRoster
 
-        teams = NHL_TEAM_ABBREVS
+        # Use season-appropriate team list (handles ARI→UTA relocation)
+        teams = get_teams_for_season(season_id)
 
         if active_download:
             active_download.items_total = len(teams)
@@ -881,16 +882,18 @@ class DownloadService:
         """Download player landing pages and persist to database."""
         # Get player IDs from rosters
         from nhl_api.downloaders.sources.nhl_json import (
-            NHL_TEAM_ABBREVS,
             RosterDownloader,
+            get_teams_for_season,
         )
 
         roster_config = DownloaderConfig(base_url=NHL_API_BASE_URL)
         player_ids: set[int] = set()
 
+        # Use season-appropriate team list (handles ARI→UTA relocation)
+        teams = get_teams_for_season(season_id)
         roster_dl = RosterDownloader(roster_config)
         async with roster_dl:
-            for team_abbrev in NHL_TEAM_ABBREVS:
+            for team_abbrev in teams:
                 try:
                     roster = await roster_dl.get_roster_for_season(
                         team_abbrev, season_id
@@ -955,17 +958,19 @@ class DownloadService:
         """Download player game logs and persist to database."""
         # Get player IDs from rosters
         from nhl_api.downloaders.sources.nhl_json import (
-            NHL_TEAM_ABBREVS,
             RosterDownloader,
+            get_teams_for_season,
         )
         from nhl_api.downloaders.sources.nhl_json.player_game_log import REGULAR_SEASON
 
         roster_config = DownloaderConfig(base_url=NHL_API_BASE_URL)
         player_ids: set[int] = set()
 
+        # Use season-appropriate team list (handles ARI→UTA relocation)
+        teams = get_teams_for_season(season_id)
         roster_dl = RosterDownloader(roster_config)
         async with roster_dl:
-            for team_abbrev in NHL_TEAM_ABBREVS:
+            for team_abbrev in teams:
                 try:
                     roster = await roster_dl.get_roster_for_season(
                         team_abbrev, season_id

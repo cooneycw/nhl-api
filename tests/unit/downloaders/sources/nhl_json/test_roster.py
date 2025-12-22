@@ -11,7 +11,10 @@ import pytest
 from nhl_api.downloaders.base.base_downloader import DownloaderConfig
 from nhl_api.downloaders.base.protocol import DownloadError
 from nhl_api.downloaders.sources.nhl_json.roster import (
+    ALL_TEAM_ABBREVS,
+    CURRENT_TEAM_ABBREVS,
     NHL_TEAM_ABBREVS,
+    TEAM_RELOCATIONS,
     ParsedRoster,
     PlayerInfo,
     RosterDownloader,
@@ -20,6 +23,8 @@ from nhl_api.downloaders.sources.nhl_json.roster import (
     _parse_player,
     _parse_roster,
     create_roster_downloader,
+    get_teams_for_season,
+    resolve_team_abbrev,
 )
 
 # Sample player data for testing
@@ -295,13 +300,97 @@ class TestPlayerInfo:
 
 
 @pytest.mark.unit
-class TestNHLTeamAbbrevs:
-    """Tests for NHL_TEAM_ABBREVS constant."""
+class TestTeamRelocation:
+    """Tests for team relocation handling (ARI→UTA)."""
 
-    def test_all_32_teams_present(self) -> None:
-        """Test that all 32 NHL teams are present."""
-        # 32 teams, but ARI relocated to UTA so we have 33 total
-        assert len(NHL_TEAM_ABBREVS) == 33
+    def test_team_relocations_mapping(self) -> None:
+        """Test that TEAM_RELOCATIONS contains ARI→UTA mapping."""
+        assert "ARI" in TEAM_RELOCATIONS
+        new_abbrev, relocation_season = TEAM_RELOCATIONS["ARI"]
+        assert new_abbrev == "UTA"
+        assert relocation_season == 20242025
+
+    def test_resolve_team_abbrev_current_season(self) -> None:
+        """Test resolving ARI to UTA for current season (no season_id)."""
+        assert resolve_team_abbrev("ARI") == "UTA"
+
+    def test_resolve_team_abbrev_after_relocation(self) -> None:
+        """Test resolving ARI to UTA for season after relocation."""
+        assert resolve_team_abbrev("ARI", 20242025) == "UTA"
+        assert resolve_team_abbrev("ARI", 20252026) == "UTA"
+
+    def test_resolve_team_abbrev_before_relocation(self) -> None:
+        """Test resolving ARI stays ARI for season before relocation."""
+        assert resolve_team_abbrev("ARI", 20232024) == "ARI"
+        assert resolve_team_abbrev("ARI", 20222023) == "ARI"
+
+    def test_resolve_team_abbrev_non_relocated_team(self) -> None:
+        """Test that non-relocated teams pass through unchanged."""
+        assert resolve_team_abbrev("BOS") == "BOS"
+        assert resolve_team_abbrev("BOS", 20242025) == "BOS"
+        assert resolve_team_abbrev("BOS", 20232024) == "BOS"
+
+    def test_resolve_team_abbrev_uta_unchanged(self) -> None:
+        """Test that UTA (new name) passes through unchanged."""
+        assert resolve_team_abbrev("UTA") == "UTA"
+        assert resolve_team_abbrev("UTA", 20242025) == "UTA"
+
+
+@pytest.mark.unit
+class TestGetTeamsForSeason:
+    """Tests for get_teams_for_season function."""
+
+    def test_current_season_returns_current_teams(self) -> None:
+        """Test that None returns current teams (UTA, not ARI)."""
+        teams = get_teams_for_season(None)
+        assert "UTA" in teams
+        assert "ARI" not in teams
+        assert len(teams) == 32
+
+    def test_2024_season_returns_current_teams(self) -> None:
+        """Test that 2024-25 season returns current teams."""
+        teams = get_teams_for_season(20242025)
+        assert "UTA" in teams
+        assert "ARI" not in teams
+        assert len(teams) == 32
+
+    def test_historical_season_returns_ari(self) -> None:
+        """Test that pre-relocation season returns ARI, not UTA."""
+        teams = get_teams_for_season(20232024)
+        assert "ARI" in teams
+        assert "UTA" not in teams
+        assert len(teams) == 32
+
+    def test_older_historical_season(self) -> None:
+        """Test that older seasons also return ARI."""
+        teams = get_teams_for_season(20202021)
+        assert "ARI" in teams
+        assert "UTA" not in teams
+
+
+@pytest.mark.unit
+class TestNHLTeamAbbrevs:
+    """Tests for team abbreviation constants."""
+
+    def test_current_team_abbrevs_has_32_teams(self) -> None:
+        """Test that CURRENT_TEAM_ABBREVS has exactly 32 teams."""
+        assert len(CURRENT_TEAM_ABBREVS) == 32
+
+    def test_current_team_abbrevs_has_uta_not_ari(self) -> None:
+        """Test that CURRENT_TEAM_ABBREVS has UTA, not ARI."""
+        assert "UTA" in CURRENT_TEAM_ABBREVS
+        assert "ARI" not in CURRENT_TEAM_ABBREVS
+
+    def test_all_team_abbrevs_has_both_ari_and_uta(self) -> None:
+        """Test that ALL_TEAM_ABBREVS has both ARI and UTA."""
+        assert "ARI" in ALL_TEAM_ABBREVS
+        assert "UTA" in ALL_TEAM_ABBREVS
+        assert len(ALL_TEAM_ABBREVS) == 33
+
+    def test_nhl_team_abbrevs_is_current(self) -> None:
+        """Test that legacy NHL_TEAM_ABBREVS equals CURRENT_TEAM_ABBREVS."""
+        assert NHL_TEAM_ABBREVS == CURRENT_TEAM_ABBREVS
+        assert len(NHL_TEAM_ABBREVS) == 32
 
     def test_common_teams_present(self) -> None:
         """Test that common teams are in the list."""
