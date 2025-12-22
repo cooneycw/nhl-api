@@ -41,7 +41,7 @@ SOURCE_TYPE_DISPLAY = {
     "html_report": "HTML Game Reports",
     "shift_chart": "Shift Charts",
     "quanthockey": "QuantHockey",
-    "dailyfaceoff": "Daily Faceoff",
+    "dailyfaceoff": "DailyFaceoff",
 }
 
 # Human-friendly display names for individual sources
@@ -62,6 +62,12 @@ SOURCE_DISPLAY_NAMES = {
     "html_ss": "Shot Summary (SS)",
     "html_th": "Time on Ice - Home (TH)",
     "html_tv": "Time on Ice - Visitor (TV)",
+    # DailyFaceoff sources
+    "dailyfaceoff_lines": "Line Combinations",
+    "dailyfaceoff_power_play": "Power Play Units",
+    "dailyfaceoff_penalty_kill": "Penalty Kill Units",
+    "dailyfaceoff_injuries": "Injuries",
+    "dailyfaceoff_starting_goalies": "Starting Goalies",
 }
 
 

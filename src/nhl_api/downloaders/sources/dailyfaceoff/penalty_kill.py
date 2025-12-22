@@ -23,13 +23,18 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from bs4 import BeautifulSoup, Tag
 
 from nhl_api.downloaders.sources.dailyfaceoff.base_dailyfaceoff_downloader import (
     BaseDailyFaceoffDownloader,
 )
+
+if TYPE_CHECKING:
+    from datetime import date
+
+    from nhl_api.services.db import DatabaseService
 
 logger = logging.getLogger(__name__)
 
@@ -703,3 +708,115 @@ class PenaltyKillDownloader(BaseDailyFaceoffDownloader):
             "position": player.position,
             "player_id": player.player_id,
         }
+
+    async def persist(
+        self,
+        db: DatabaseService,
+        pk_data: dict[str, Any],
+        team_abbrev: str,
+        season_id: int,
+        snapshot_date: date,
+    ) -> int:
+        """Persist penalty kill units to the database.
+
+        Uses upsert (INSERT ... ON CONFLICT) to handle re-downloads gracefully.
+
+        Args:
+            db: Database service instance
+            pk_data: Parsed penalty kill dictionary from download_team()
+            team_abbrev: Team abbreviation (e.g., "BOS")
+            season_id: NHL season ID (e.g., 20242025)
+            snapshot_date: Date of the snapshot
+
+        Returns:
+            Number of player positions upserted
+        """
+        count = 0
+        fetched_at = datetime.fromisoformat(
+            pk_data.get("fetched_at", datetime.now(UTC).isoformat())
+        )
+
+        async def insert_unit(unit_data: dict[str, Any] | None) -> int:
+            if not unit_data:
+                return 0
+
+            unit_num = unit_data.get("unit_number", 0)
+            inserted = 0
+
+            # Insert forwards
+            for player in unit_data.get("forwards", []):
+                if not player.get("name"):
+                    continue
+
+                await db.execute(
+                    """
+                    INSERT INTO df_penalty_kill_units (
+                        team_abbrev, season_id, snapshot_date, fetched_at,
+                        unit_number, player_name, df_player_id, jersey_number,
+                        position_type
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    ON CONFLICT (team_abbrev, snapshot_date, unit_number, player_name)
+                    DO UPDATE SET
+                        fetched_at = EXCLUDED.fetched_at,
+                        df_player_id = EXCLUDED.df_player_id,
+                        jersey_number = EXCLUDED.jersey_number,
+                        position_type = EXCLUDED.position_type,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    team_abbrev,
+                    season_id,
+                    snapshot_date,
+                    fetched_at,
+                    unit_num,
+                    player.get("name"),
+                    player.get("player_id"),
+                    player.get("jersey_number"),
+                    "forward",
+                )
+                inserted += 1
+
+            # Insert defensemen
+            for player in unit_data.get("defensemen", []):
+                if not player.get("name"):
+                    continue
+
+                await db.execute(
+                    """
+                    INSERT INTO df_penalty_kill_units (
+                        team_abbrev, season_id, snapshot_date, fetched_at,
+                        unit_number, player_name, df_player_id, jersey_number,
+                        position_type
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    ON CONFLICT (team_abbrev, snapshot_date, unit_number, player_name)
+                    DO UPDATE SET
+                        fetched_at = EXCLUDED.fetched_at,
+                        df_player_id = EXCLUDED.df_player_id,
+                        jersey_number = EXCLUDED.jersey_number,
+                        position_type = EXCLUDED.position_type,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    team_abbrev,
+                    season_id,
+                    snapshot_date,
+                    fetched_at,
+                    unit_num,
+                    player.get("name"),
+                    player.get("player_id"),
+                    player.get("jersey_number"),
+                    "defense",
+                )
+                inserted += 1
+
+            return inserted
+
+        # Insert PK1 and PK2
+        count += await insert_unit(pk_data.get("pk1"))
+        count += await insert_unit(pk_data.get("pk2"))
+
+        logger.debug(
+            "Persisted %d penalty kill players for %s on %s",
+            count,
+            team_abbrev,
+            snapshot_date,
+        )
+        return count

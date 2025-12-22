@@ -23,7 +23,11 @@ from nhl_api.downloaders.sources.dailyfaceoff.base_dailyfaceoff_downloader impor
 )
 
 if TYPE_CHECKING:
+    from datetime import date
+
     from bs4 import BeautifulSoup
+
+    from nhl_api.services.db import DatabaseService
 
 logger = logging.getLogger(__name__)
 
@@ -358,3 +362,91 @@ class PowerPlayDownloader(BaseDailyFaceoffDownloader):
             "season_assists": player.season_assists,
             "season_points": player.season_points,
         }
+
+    async def persist(
+        self,
+        db: DatabaseService,
+        pp_data: dict[str, Any],
+        team_abbrev: str,
+        season_id: int,
+        snapshot_date: date,
+    ) -> int:
+        """Persist power play units to the database.
+
+        Uses upsert (INSERT ... ON CONFLICT) to handle re-downloads gracefully.
+
+        Args:
+            db: Database service instance
+            pp_data: Parsed power play dictionary from download_team()
+            team_abbrev: Team abbreviation (e.g., "BOS")
+            season_id: NHL season ID (e.g., 20242025)
+            snapshot_date: Date of the snapshot
+
+        Returns:
+            Number of player positions upserted
+        """
+        count = 0
+        fetched_at = datetime.fromisoformat(
+            pp_data.get("fetched_at", datetime.now(UTC).isoformat())
+        )
+
+        async def insert_unit(unit_data: dict[str, Any] | None) -> int:
+            if not unit_data:
+                return 0
+
+            unit_num = unit_data.get("unit_number", 0)
+            players = unit_data.get("players", [])
+            inserted = 0
+
+            for player in players:
+                if not player.get("name"):
+                    continue
+
+                await db.execute(
+                    """
+                    INSERT INTO df_power_play_units (
+                        team_abbrev, season_id, snapshot_date, fetched_at,
+                        unit_number, player_name, df_player_id, jersey_number,
+                        position_code, df_rating, season_goals, season_assists, season_points
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                    ON CONFLICT (team_abbrev, snapshot_date, unit_number, player_name)
+                    DO UPDATE SET
+                        fetched_at = EXCLUDED.fetched_at,
+                        df_player_id = EXCLUDED.df_player_id,
+                        jersey_number = EXCLUDED.jersey_number,
+                        position_code = EXCLUDED.position_code,
+                        df_rating = EXCLUDED.df_rating,
+                        season_goals = EXCLUDED.season_goals,
+                        season_assists = EXCLUDED.season_assists,
+                        season_points = EXCLUDED.season_points,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    team_abbrev,
+                    season_id,
+                    snapshot_date,
+                    fetched_at,
+                    unit_num,
+                    player.get("name"),
+                    str(player.get("player_id")) if player.get("player_id") else None,
+                    player.get("jersey_number"),
+                    player.get("position"),
+                    player.get("rating"),
+                    player.get("season_goals"),
+                    player.get("season_assists"),
+                    player.get("season_points"),
+                )
+                inserted += 1
+
+            return inserted
+
+        # Insert PP1 and PP2
+        count += await insert_unit(pp_data.get("pp1"))
+        count += await insert_unit(pp_data.get("pp2"))
+
+        logger.debug(
+            "Persisted %d power play players for %s on %s",
+            count,
+            team_abbrev,
+            snapshot_date,
+        )
+        return count

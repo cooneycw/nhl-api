@@ -19,13 +19,18 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from bs4 import BeautifulSoup, Tag
 
 from nhl_api.downloaders.sources.dailyfaceoff.base_dailyfaceoff_downloader import (
     BaseDailyFaceoffDownloader,
 )
+
+if TYPE_CHECKING:
+    from datetime import date
+
+    from nhl_api.services.db import DatabaseService
 
 logger = logging.getLogger(__name__)
 
@@ -517,3 +522,104 @@ class LineCombinationsDownloader(BaseDailyFaceoffDownloader):
             "injury_status": player.injury_status,
             "player_id": player.player_id,
         }
+
+    async def persist(
+        self,
+        db: DatabaseService,
+        lineup: dict[str, Any],
+        season_id: int,
+        snapshot_date: date,
+    ) -> int:
+        """Persist line combinations to the database.
+
+        Uses upsert (INSERT ... ON CONFLICT) to handle re-downloads gracefully.
+
+        Args:
+            db: Database service instance
+            lineup: Parsed lineup dictionary from download_team()
+            season_id: NHL season ID (e.g., 20242025)
+            snapshot_date: Date of the snapshot
+
+        Returns:
+            Number of player positions upserted
+        """
+        count = 0
+        team_abbrev = lineup.get("team_abbreviation", "")
+        fetched_at = datetime.fromisoformat(
+            lineup.get("fetched_at", datetime.now(UTC).isoformat())
+        )
+
+        # Helper to insert a player position
+        async def insert_player(
+            player_dict: dict[str, Any] | None,
+            line_type: str,
+            unit_number: int,
+            position_code: str,
+        ) -> bool:
+            if not player_dict or not player_dict.get("name"):
+                return False
+
+            await db.execute(
+                """
+                INSERT INTO df_line_combinations (
+                    team_abbrev, season_id, snapshot_date, fetched_at,
+                    player_name, df_player_id, jersey_number,
+                    line_type, unit_number, position_code, injury_status
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                ON CONFLICT (team_abbrev, snapshot_date, player_name, line_type, unit_number, position_code)
+                DO UPDATE SET
+                    fetched_at = EXCLUDED.fetched_at,
+                    df_player_id = EXCLUDED.df_player_id,
+                    jersey_number = EXCLUDED.jersey_number,
+                    injury_status = EXCLUDED.injury_status,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                team_abbrev,
+                season_id,
+                snapshot_date,
+                fetched_at,
+                player_dict.get("name"),
+                player_dict.get("player_id"),
+                player_dict.get("jersey_number"),
+                line_type,
+                unit_number,
+                position_code,
+                player_dict.get("injury_status"),
+            )
+            return True
+
+        # Insert forward lines
+        for line in lineup.get("forward_lines", []):
+            line_num = line.get("line_number", 0)
+            if await insert_player(line.get("left_wing"), "forward", line_num, "lw"):
+                count += 1
+            if await insert_player(line.get("center"), "forward", line_num, "c"):
+                count += 1
+            if await insert_player(line.get("right_wing"), "forward", line_num, "rw"):
+                count += 1
+
+        # Insert defensive pairs
+        for pair in lineup.get("defensive_pairs", []):
+            pair_num = pair.get("pair_number", 0)
+            if await insert_player(pair.get("left_defense"), "defense", pair_num, "ld"):
+                count += 1
+            if await insert_player(
+                pair.get("right_defense"), "defense", pair_num, "rd"
+            ):
+                count += 1
+
+        # Insert goalies
+        goalies = lineup.get("goalies")
+        if goalies:
+            if await insert_player(goalies.get("starter"), "goalie", 1, "g"):
+                count += 1
+            if await insert_player(goalies.get("backup"), "goalie", 2, "g"):
+                count += 1
+
+        logger.debug(
+            "Persisted %d player positions for %s on %s",
+            count,
+            team_abbrev,
+            snapshot_date,
+        )
+        return count

@@ -2,6 +2,7 @@
 
 from nhl_api.viewer.routers import (
     coverage,
+    dailyfaceoff,
     downloads,
     entities,
     health,
@@ -12,6 +13,7 @@ from nhl_api.viewer.routers import (
 
 __all__ = [
     "coverage",
+    "dailyfaceoff",
     "downloads",
     "entities",
     "health",
