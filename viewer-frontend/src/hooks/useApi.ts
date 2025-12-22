@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, type HealthResponse, type DashboardStats, type BatchSummary, type SourceHealth } from '@/lib/api'
+import { api, type HealthResponse, type DashboardStats, type BatchSummary, type SourceHealth, type SourceListResponse } from '@/lib/api'
 
 // Health check
 export function useHealth() {
@@ -32,7 +32,10 @@ export function useBatches(status?: string) {
 export function useSourceHealth() {
   return useQuery({
     queryKey: ['monitoring', 'sources'],
-    queryFn: () => api.get<SourceHealth[]>('/monitoring/sources'),
+    queryFn: async () => {
+      const response = await api.get<SourceListResponse>('/monitoring/sources')
+      return response.sources
+    },
     refetchInterval: 30000,
   })
 }
