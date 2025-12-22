@@ -13,7 +13,7 @@ import math
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from nhl_api.services.db import DatabaseService
 from nhl_api.viewer.dependencies import get_db
@@ -24,6 +24,7 @@ from nhl_api.viewer.schemas.monitoring import (
     CleanupResponse,
     DashboardResponse,
     DashboardStats,
+    DeleteSeasonResponse,
     DownloadItem,
     FailedDownload,
     FailureListResponse,
@@ -698,4 +699,184 @@ async def get_timeseries(
         period=period,
         data=data,
         generated_at=datetime.now(UTC),
+    )
+
+
+# =============================================================================
+# Delete Season Data Endpoint
+# =============================================================================
+
+
+@router.delete(
+    "/seasons/{season_id}/data",
+    response_model=DeleteSeasonResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Delete Season Data",
+    description="Delete all data for a specific season (games, stats, downloads, etc.)",
+)
+async def delete_season_data(
+    db: DbDep,
+    season_id: int = Path(..., description="Season ID to delete (e.g., 20242025)"),
+    dry_run: bool = Query(
+        default=True,
+        description="Preview deletion without executing (dry run mode)",
+    ),
+) -> DeleteSeasonResponse:
+    """Delete all data for a specific season.
+
+    **DANGEROUS OPERATION**: This permanently deletes all data for the specified season.
+
+    Deletes in cascade order (respecting foreign keys):
+    1. game_events
+    2. game_skater_stats
+    3. game_goalie_stats
+    4. game_shifts
+    5. game_team_stats
+    6. player_game_logs
+    7. games
+    8. download_progress
+    9. import_batches
+
+    Args:
+        season_id: The season ID to delete (e.g., 20242025)
+        dry_run: If True (default), preview what would be deleted without executing
+
+    Returns:
+        DeleteSeasonResponse with counts of deleted records per table
+    """
+    import time
+
+    start_time = time.time()
+    deleted_counts: dict[str, int] = {}
+
+    # Tables to delete from (in cascade order)
+    tables = [
+        "game_events",
+        "game_skater_stats",
+        "game_goalie_stats",
+        "game_shifts",
+        "game_team_stats",
+        "player_game_logs",
+        "games",
+        "download_progress",
+        "import_batches",
+    ]
+
+    if dry_run:
+        # Dry run: count what would be deleted
+        for table in tables:
+            # Build appropriate WHERE clause based on table
+            if table in ["download_progress", "import_batches"]:
+                where_clause = f"WHERE season_id = {season_id}"
+            elif table == "games":
+                where_clause = f"WHERE season_id = {season_id}"
+            elif table in [
+                "game_events",
+                "game_skater_stats",
+                "game_goalie_stats",
+                "game_shifts",
+                "game_team_stats",
+                "player_game_logs",
+            ]:
+                where_clause = f"WHERE game_id IN (SELECT game_id FROM games WHERE season_id = {season_id})"
+            else:
+                continue
+
+            count = await db.fetchval(f"SELECT COUNT(*) FROM {table} {where_clause}")
+            deleted_counts[table] = count or 0
+
+    else:
+        # Real deletion: execute within transaction
+        async with db.transaction():
+            # Delete game-related records first
+            for table in [
+                "game_events",
+                "game_skater_stats",
+                "game_goalie_stats",
+                "game_shifts",
+                "game_team_stats",
+                "player_game_logs",
+            ]:
+                result = await db.fetchval(
+                    f"""
+                    WITH deleted AS (
+                        DELETE FROM {table}
+                        WHERE game_id IN (SELECT game_id FROM games WHERE season_id = $1)
+                        RETURNING *
+                    )
+                    SELECT COUNT(*) FROM deleted
+                    """,
+                    season_id,
+                )
+                deleted_counts[table] = result or 0
+
+            # Delete games
+            result = await db.fetchval(
+                """
+                WITH deleted AS (
+                    DELETE FROM games
+                    WHERE season_id = $1
+                    RETURNING *
+                )
+                SELECT COUNT(*) FROM deleted
+                """,
+                season_id,
+            )
+            deleted_counts["games"] = result or 0
+
+            # Delete download monitoring records
+            result = await db.fetchval(
+                """
+                WITH deleted AS (
+                    DELETE FROM download_progress
+                    WHERE season_id = $1
+                    RETURNING *
+                )
+                SELECT COUNT(*) FROM deleted
+                """,
+                season_id,
+            )
+            deleted_counts["download_progress"] = result or 0
+
+            result = await db.fetchval(
+                """
+                WITH deleted AS (
+                    DELETE FROM import_batches
+                    WHERE season_id = $1
+                    RETURNING *
+                )
+                SELECT COUNT(*) FROM deleted
+                """,
+                season_id,
+            )
+            deleted_counts["import_batches"] = result or 0
+
+        # Refresh materialized views after deletion
+        await db.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_player_summary")
+        await db.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_game_summary")
+        await db.execute(
+            "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_download_batch_stats"
+        )
+        await db.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_source_health")
+        await db.execute(
+            "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_reconciliation_summary"
+        )
+        await db.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_data_coverage")
+
+    execution_time_ms = (time.time() - start_time) * 1000
+    total_deleted = sum(deleted_counts.values())
+
+    message = (
+        f"Dry run: Would delete {total_deleted:,} records for season {season_id}"
+        if dry_run
+        else f"Successfully deleted {total_deleted:,} records for season {season_id}"
+    )
+
+    return DeleteSeasonResponse(
+        season_id=season_id,
+        dry_run=dry_run,
+        deleted_counts=deleted_counts,
+        total_records_deleted=total_deleted,
+        execution_time_ms=execution_time_ms,
+        message=message,
     )

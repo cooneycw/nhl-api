@@ -73,6 +73,15 @@ interface CancelDownloadResponse {
   message: string
 }
 
+interface DeleteSeasonResponse {
+  season_id: number
+  dry_run: boolean
+  deleted_counts: Record<string, number>
+  total_records_deleted: number
+  execution_time_ms: number
+  message: string
+}
+
 // Hooks
 
 export function useDownloadOptions() {
@@ -119,6 +128,29 @@ export function useCancelDownload() {
   })
 }
 
+export function useDeleteSeason() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ seasonId, dryRun = false }: { seasonId: number; dryRun?: boolean }) =>
+      api.delete<DeleteSeasonResponse>(
+        `/monitoring/seasons/${seasonId}/data`,
+        { dry_run: dryRun.toString() }
+      ),
+    onSuccess: (data) => {
+      // If it was a real delete (not dry run), invalidate all queries
+      if (!data.dry_run) {
+        queryClient.invalidateQueries({ queryKey: ['players'] })
+        queryClient.invalidateQueries({ queryKey: ['games'] })
+        queryClient.invalidateQueries({ queryKey: ['teams'] })
+        queryClient.invalidateQueries({ queryKey: ['monitoring'] })
+        queryClient.invalidateQueries({ queryKey: ['downloads'] })
+        queryClient.invalidateQueries({ queryKey: ['validation'] })
+      }
+    },
+  })
+}
+
 // Export types for use in components
 export type {
   SeasonOption,
@@ -128,4 +160,5 @@ export type {
   ActiveDownload,
   ActiveDownloadsResponse,
   StartDownloadRequest,
+  DeleteSeasonResponse,
 }

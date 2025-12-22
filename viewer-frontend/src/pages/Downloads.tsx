@@ -6,13 +6,26 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import {
   useDownloadOptions,
   useActiveDownloads,
   useStartDownload,
   useCancelDownload,
+  useDeleteSeason,
   type SourceGroup,
+  type DeleteSeasonResponse,
 } from '@/hooks/useDownloads'
-import { Download, X, Loader2, Play, AlertCircle } from 'lucide-react'
+import { Download, X, Loader2, Play, AlertCircle, Trash2 } from 'lucide-react'
 
 // Source types to auto-select by default (NHL API sources)
 // Excludes: quanthockey, dailyfaceoff
@@ -23,10 +36,13 @@ export function Downloads() {
   const { data: activeDownloads, isLoading: activeLoading } = useActiveDownloads()
   const startDownload = useStartDownload()
   const cancelDownload = useCancelDownload()
+  const deleteSeason = useDeleteSeason()
 
   const [selectedSeasons, setSelectedSeasons] = useState<number[]>([])
   const [selectedSources, setSelectedSources] = useState<string[]>([])
   const [initialized, setInitialized] = useState(false)
+  const [deletePreview, setDeletePreview] = useState<DeleteSeasonResponse | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   // Set default selections when options load
   useEffect(() => {
@@ -94,6 +110,28 @@ export function Downloads() {
 
   const handleCancelDownload = (batchId: number) => {
     cancelDownload.mutate(batchId)
+  }
+
+  const handleDeletePreview = async (seasonId: number) => {
+    try {
+      const result = await deleteSeason.mutateAsync({ seasonId, dryRun: true })
+      setDeletePreview(result)
+      setDeleteDialogOpen(true)
+    } catch (error) {
+      console.error('Failed to get delete preview:', error)
+    }
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deletePreview) return
+
+    try {
+      await deleteSeason.mutateAsync({ seasonId: deletePreview.season_id, dryRun: false })
+      setDeleteDialogOpen(false)
+      setDeletePreview(null)
+    } catch (error) {
+      console.error('Failed to delete season data:', error)
+    }
   }
 
   const canStartDownload =
@@ -332,6 +370,121 @@ export function Downloads() {
                     </div>
                     <Progress value={download.progress_percent ?? 0} />
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Delete Season Data */}
+      <Card className="border-destructive/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-destructive">
+            <Trash2 className="h-5 w-5" />
+            Delete Season Data
+          </CardTitle>
+          <CardDescription>
+            Permanently remove all data for a specific season. This action cannot be undone.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {optionsLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {options?.seasons.map((season) => (
+                <div
+                  key={season.season_id}
+                  className="flex items-center justify-between rounded-lg border p-4"
+                >
+                  <div>
+                    <div className="font-medium">{season.label}</div>
+                    <div className="text-sm text-muted-foreground">
+                      Season ID: {season.season_id}
+                      {season.is_current && (
+                        <Badge variant="secondary" className="ml-2">
+                          Current
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <AlertDialog open={deleteDialogOpen && deletePreview?.season_id === season.season_id} onOpenChange={setDeleteDialogOpen}>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDeletePreview(season.season_id)}
+                        disabled={deleteSeason.isPending}
+                      >
+                        {deleteSeason.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Loading...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </>
+                        )}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete {season.label} Data?</AlertDialogTitle>
+                        <AlertDialogDescription asChild>
+                          <div className="space-y-4">
+                            <p className="text-destructive font-medium">
+                              This will permanently delete all data for the {season.label} season.
+                              This action cannot be undone.
+                            </p>
+
+                            {deletePreview && (
+                              <div className="rounded-lg bg-muted p-4 space-y-2">
+                                <p className="font-semibold">Data to be deleted:</p>
+                                <ul className="text-sm space-y-1">
+                                  {Object.entries(deletePreview.deleted_counts).map(([table, count]) => (
+                                    <li key={table} className="flex justify-between">
+                                      <span className="text-muted-foreground">{table}:</span>
+                                      <span className="font-medium">{count.toLocaleString()} records</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                                <div className="pt-2 border-t mt-2">
+                                  <div className="flex justify-between font-semibold">
+                                    <span>Total:</span>
+                                    <span>{deletePreview.total_records_deleted.toLocaleString()} records</span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setDeletePreview(null)}>
+                          Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleDeleteConfirm}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          {deleteSeason.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Deleting...
+                            </>
+                          ) : (
+                            'Delete Permanently'
+                          )}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               ))}
             </div>
