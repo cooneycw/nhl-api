@@ -12,6 +12,7 @@ Tests cover:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -554,3 +555,213 @@ class TestViewerIntegration:
 
         # Status should be valid DownloadStatus
         assert result.status in list(DownloadStatus)
+
+
+# =============================================================================
+# HTML Persistence Tests
+# =============================================================================
+
+
+class TestHTMLPersistence:
+    """Tests for HTML report persistence to disk."""
+
+    @pytest.mark.asyncio
+    async def test_html_persisted_on_download(
+        self,
+        tmp_path: Path,
+        sample_html: bytes,
+    ) -> None:
+        """Test that HTML is saved to disk when download succeeds."""
+        # Create config with custom base_dir for testing
+        config = HTMLDownloaderConfig(
+            store_raw_html=True,
+            persist_html=True,
+        )
+        downloader = ConcreteHTMLDownloader(config)
+
+        # Override storage manager to use temp directory
+
+        from nhl_api.utils.html_storage import HTMLStorageManager
+
+        downloader._storage_manager = HTMLStorageManager(base_dir=tmp_path)
+
+        # Mock HTTP response
+        mock_response = MagicMock()
+        mock_response.is_success = True
+        mock_response.content = sample_html
+
+        with patch.object(
+            downloader, "_get", new_callable=AsyncMock, return_value=mock_response
+        ):
+            async with downloader:
+                result = await downloader.download_game(2024020500)
+
+        # Verify download succeeded
+        assert result.status == DownloadStatus.COMPLETED
+
+        # Verify HTML was persisted to disk
+        expected_path = tmp_path / "20242025" / "GS" / "2024020500.HTM"
+        assert expected_path.exists()
+
+        # Verify content matches
+        saved_html = expected_path.read_bytes()
+        assert saved_html == sample_html
+
+    @pytest.mark.asyncio
+    async def test_persistence_disabled_via_config(
+        self,
+        tmp_path: Path,
+        sample_html: bytes,
+    ) -> None:
+        """Test that persistence can be disabled via config."""
+        config = HTMLDownloaderConfig(
+            store_raw_html=True,
+            persist_html=False,  # Disabled
+        )
+        downloader = ConcreteHTMLDownloader(config)
+
+        # Mock HTTP response
+        mock_response = MagicMock()
+        mock_response.is_success = True
+        mock_response.content = sample_html
+
+        with patch.object(
+            downloader, "_get", new_callable=AsyncMock, return_value=mock_response
+        ):
+            async with downloader:
+                result = await downloader.download_game(2024020500)
+
+        # Verify download succeeded
+        assert result.status == DownloadStatus.COMPLETED
+
+        # Verify no HTML was persisted
+        # (storage manager should not be initialized)
+        assert downloader._storage_manager is None
+
+        # Verify temp directory is empty (no files created)
+        assert not (tmp_path / "20242025").exists()
+
+    @pytest.mark.asyncio
+    async def test_download_continues_if_persistence_fails(
+        self,
+        sample_html: bytes,
+    ) -> None:
+        """Test that download succeeds even if HTML persistence fails."""
+        config = HTMLDownloaderConfig(
+            store_raw_html=True,
+            persist_html=True,
+        )
+        downloader = ConcreteHTMLDownloader(config)
+
+        # Mock storage manager to raise exception
+        mock_storage = MagicMock()
+        mock_storage.save_html.side_effect = OSError("Disk full")
+        downloader._storage_manager = mock_storage
+
+        # Mock HTTP response
+        mock_response = MagicMock()
+        mock_response.is_success = True
+        mock_response.content = sample_html
+
+        with patch.object(
+            downloader, "_get", new_callable=AsyncMock, return_value=mock_response
+        ):
+            async with downloader:
+                # Should not raise, persistence failure is non-fatal
+                result = await downloader.download_game(2024020500)
+
+        # Verify download succeeded despite persistence failure
+        assert result.status == DownloadStatus.COMPLETED
+        assert result.raw_content == sample_html
+
+    @pytest.mark.asyncio
+    async def test_multiple_downloads_create_separate_files(
+        self,
+        tmp_path: Path,
+        sample_html: bytes,
+    ) -> None:
+        """Test that multiple downloads create separate HTML files."""
+        config = HTMLDownloaderConfig(
+            store_raw_html=True,
+            persist_html=True,
+        )
+        downloader = ConcreteHTMLDownloader(config)
+
+        # Override storage manager to use temp directory
+        from nhl_api.utils.html_storage import HTMLStorageManager
+
+        downloader._storage_manager = HTMLStorageManager(base_dir=tmp_path)
+
+        # Mock HTTP response
+        mock_response = MagicMock()
+        mock_response.is_success = True
+        mock_response.content = sample_html
+
+        with patch.object(
+            downloader, "_get", new_callable=AsyncMock, return_value=mock_response
+        ):
+            async with downloader:
+                # Download multiple games
+                await downloader.download_game(2024020001)
+                await downloader.download_game(2024020002)
+                await downloader.download_game(2024020003)
+
+        # Verify all files were created
+        assert (tmp_path / "20242025" / "GS" / "2024020001.HTM").exists()
+        assert (tmp_path / "20242025" / "GS" / "2024020002.HTM").exists()
+        assert (tmp_path / "20242025" / "GS" / "2024020003.HTM").exists()
+
+    @pytest.mark.asyncio
+    async def test_different_report_types_create_separate_directories(
+        self,
+        tmp_path: Path,
+        sample_html: bytes,
+    ) -> None:
+        """Test that different report types are stored in separate directories."""
+
+        # Create two different downloader types
+        class ESDownloader(ConcreteHTMLDownloader):
+            @property
+            def report_type(self) -> str:
+                return "ES"
+
+        class PLDownloader(ConcreteHTMLDownloader):
+            @property
+            def report_type(self) -> str:
+                return "PL"
+
+        config = HTMLDownloaderConfig(
+            store_raw_html=True,
+            persist_html=True,
+        )
+
+        es_downloader = ESDownloader(config)
+        pl_downloader = PLDownloader(config)
+
+        # Override storage managers to use temp directory
+        from nhl_api.utils.html_storage import HTMLStorageManager
+
+        es_downloader._storage_manager = HTMLStorageManager(base_dir=tmp_path)
+        pl_downloader._storage_manager = HTMLStorageManager(base_dir=tmp_path)
+
+        # Mock HTTP response
+        mock_response = MagicMock()
+        mock_response.is_success = True
+        mock_response.content = sample_html
+
+        # Download from both downloaders
+        with patch.object(
+            es_downloader, "_get", new_callable=AsyncMock, return_value=mock_response
+        ):
+            async with es_downloader:
+                await es_downloader.download_game(2024020500)
+
+        with patch.object(
+            pl_downloader, "_get", new_callable=AsyncMock, return_value=mock_response
+        ):
+            async with pl_downloader:
+                await pl_downloader.download_game(2024020500)
+
+        # Verify separate directories were created
+        assert (tmp_path / "20242025" / "ES" / "2024020500.HTM").exists()
+        assert (tmp_path / "20242025" / "PL" / "2024020500.HTM").exists()

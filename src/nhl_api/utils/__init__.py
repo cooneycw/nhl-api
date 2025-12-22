@@ -1,5 +1,6 @@
 """Utility functions and helpers."""
 
+from nhl_api.utils.html_storage import HTMLStorageManager
 from nhl_api.utils.http_client import (
     ConnectionError,
     ContentType,
@@ -20,6 +21,8 @@ from nhl_api.utils.name_matching import (
 )
 
 __all__ = [
+    # HTML Storage
+    "HTMLStorageManager",
     # HTTP Client
     "ConnectionError",
     "ContentType",

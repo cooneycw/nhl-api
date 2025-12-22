@@ -37,6 +37,7 @@ from nhl_api.downloaders.base.protocol import (
     DownloadResult,
     DownloadStatus,
 )
+from nhl_api.utils.html_storage import HTMLStorageManager
 
 if TYPE_CHECKING:
     from nhl_api.downloaders.base.rate_limiter import RateLimiter
@@ -70,6 +71,7 @@ class HTMLDownloaderConfig(DownloaderConfig):
         http_timeout: HTTP request timeout in seconds
         health_check_url: Not used for HTML reports
         store_raw_html: Whether to preserve raw HTML bytes in results
+        persist_html: Whether to save HTML reports to disk for comparison
     """
 
     base_url: str = NHL_HTML_BASE_URL
@@ -79,6 +81,7 @@ class HTMLDownloaderConfig(DownloaderConfig):
     http_timeout: float = 45.0  # HTML pages can be slower
     health_check_url: str = ""
     store_raw_html: bool = True
+    persist_html: bool = True
 
 
 # Default configuration instance
@@ -147,8 +150,10 @@ class BaseHTMLDownloader(BaseDownloader):
         )
         self._game_ids: list[int] = game_ids or []
         self._store_raw = getattr(config, "store_raw_html", True)
+        self._persist_html = getattr(config, "persist_html", True)
         self._last_raw_content: bytes | None = None
         self._config: HTMLDownloaderConfig  # Type hint for IDE
+        self._storage_manager = HTMLStorageManager() if self._persist_html else None
 
     @property
     @abstractmethod
@@ -335,7 +340,8 @@ class BaseHTMLDownloader(BaseDownloader):
     async def download_game(self, game_id: int) -> DownloadResult:
         """Download HTML report for a specific game.
 
-        Overrides base method to include raw HTML content in result.
+        Overrides base method to include raw HTML content in result
+        and optionally persist HTML to disk.
 
         Args:
             game_id: NHL game ID
@@ -352,7 +358,7 @@ class BaseHTMLDownloader(BaseDownloader):
             data = await self._fetch_game(game_id)
             season_id = self._extract_season_from_game_id(game_id)
 
-            return DownloadResult(
+            result = DownloadResult(
                 source=self.source_name,
                 season_id=season_id,
                 game_id=game_id,
@@ -360,6 +366,32 @@ class BaseHTMLDownloader(BaseDownloader):
                 status=DownloadStatus.COMPLETED,
                 raw_content=self._last_raw_content if self._store_raw else None,
             )
+
+            # Persist HTML to disk if enabled
+            if self._storage_manager and self._last_raw_content:
+                try:
+                    season_str = str(season_id)
+                    self._storage_manager.save_html(
+                        season=season_str,
+                        report_type=self.report_type,
+                        game_id=game_id,
+                        html=self._last_raw_content,
+                    )
+                    logger.debug(
+                        "%s: Persisted HTML for game %d to disk",
+                        self.source_name,
+                        game_id,
+                    )
+                except Exception as save_error:
+                    # Log but don't fail the download if persistence fails
+                    logger.warning(
+                        "%s: Failed to persist HTML for game %d: %s",
+                        self.source_name,
+                        game_id,
+                        save_error,
+                    )
+
+            return result
 
         except DownloadError:
             raise
