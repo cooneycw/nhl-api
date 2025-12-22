@@ -20,7 +20,7 @@ class TestHealthEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "healthy"
+        assert data["status"] == "Healthy"
         assert data["database"]["connected"] is True
         assert data["database"]["latency_ms"] is not None
         assert "uptime_seconds" in data
@@ -36,7 +36,7 @@ class TestHealthEndpoint:
 
         assert response.status_code == 200  # Still returns 200 but degraded
         data = response.json()
-        assert data["status"] == "degraded"
+        assert data["status"] == "Degraded"
         assert data["database"]["connected"] is False
         assert data["database"]["error"] is not None
 

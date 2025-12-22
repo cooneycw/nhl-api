@@ -136,15 +136,29 @@ def create_app() -> FastAPI:
     )
 
     @app.get("/favicon.svg", include_in_schema=False)
+    @app.head("/favicon.svg", include_in_schema=False)
     async def favicon() -> FileResponse:
-        """Serve favicon."""
-        return FileResponse(favicon_path, media_type="image/svg+xml")
+        """Serve favicon with cache headers."""
+        return FileResponse(
+            favicon_path,
+            media_type="image/svg+xml",
+            headers={
+                "Cache-Control": "public, max-age=3600, must-revalidate",
+            },
+        )
 
     # Also serve as favicon.ico redirect for browsers that request it
     @app.get("/favicon.ico", include_in_schema=False)
+    @app.head("/favicon.ico", include_in_schema=False)
     async def favicon_ico() -> FileResponse:
         """Serve favicon (ico redirect)."""
-        return FileResponse(favicon_path, media_type="image/svg+xml")
+        return FileResponse(
+            favicon_path,
+            media_type="image/svg+xml",
+            headers={
+                "Cache-Control": "public, max-age=3600, must-revalidate",
+            },
+        )
 
     # Root endpoint - HTML landing page with navbar
     @app.get("/", response_class=HTMLResponse)
