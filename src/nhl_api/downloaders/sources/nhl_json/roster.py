@@ -171,10 +171,112 @@ def _parse_roster(
     )
 
 
-# All 32 NHL team abbreviations
-NHL_TEAM_ABBREVS: tuple[str, ...] = (
+# Team relocations - maps old abbreviation to (new_abbrev, relocation_season)
+# Use this for seamless handling of team moves in historical vs current queries
+TEAM_RELOCATIONS: dict[str, tuple[str, int]] = {
+    "ARI": ("UTA", 20242025),  # Arizona Coyotes → Utah Hockey Club
+}
+
+# Reverse mapping for convenience
+TEAM_RELOCATIONS_REVERSE: dict[str, tuple[str, int]] = {
+    new: (old, season) for old, (new, season) in TEAM_RELOCATIONS.items()
+}
+
+
+def resolve_team_abbrev(abbrev: str, season_id: int | None = None) -> str:
+    """Resolve team abbreviation, handling relocations.
+
+    For current season or seasons after relocation, returns new abbrev.
+    For historical seasons before relocation, returns original abbrev.
+
+    Args:
+        abbrev: Team abbreviation (e.g., "ARI", "UTA")
+        season_id: Season ID (e.g., 20232024). If None, assumes current season.
+
+    Returns:
+        Resolved team abbreviation
+
+    Examples:
+        >>> resolve_team_abbrev("ARI")  # Current season
+        'UTA'
+        >>> resolve_team_abbrev("ARI", 20232024)  # Before relocation
+        'ARI'
+        >>> resolve_team_abbrev("ARI", 20242025)  # Relocation season
+        'UTA'
+        >>> resolve_team_abbrev("BOS")  # Non-relocated team
+        'BOS'
+    """
+    if abbrev in TEAM_RELOCATIONS:
+        new_abbrev, relocation_season = TEAM_RELOCATIONS[abbrev]
+        # If no season specified or season >= relocation, use new abbreviation
+        if season_id is None or season_id >= relocation_season:
+            return new_abbrev
+    return abbrev
+
+
+def get_teams_for_season(season_id: int | None = None) -> tuple[str, ...]:
+    """Get the correct team abbreviations for a given season.
+
+    Args:
+        season_id: Season ID (e.g., 20232024). If None, returns current teams.
+
+    Returns:
+        Tuple of team abbreviations valid for that season
+    """
+    if season_id is None or season_id >= 20242025:
+        return CURRENT_TEAM_ABBREVS
+    # For historical seasons, swap relocated teams back
+    teams = list(CURRENT_TEAM_ABBREVS)
+    for old_abbrev, (new_abbrev, relocation_season) in TEAM_RELOCATIONS.items():
+        if season_id < relocation_season:
+            # Replace new abbrev with old for this historical season
+            if new_abbrev in teams:
+                idx = teams.index(new_abbrev)
+                teams[idx] = old_abbrev
+    return tuple(sorted(teams))
+
+
+# Current 32 NHL teams (2024-25 season and later)
+# Use this for current season operations
+CURRENT_TEAM_ABBREVS: tuple[str, ...] = (
     "ANA",  # Anaheim Ducks
-    "ARI",  # Arizona Coyotes (relocated to UTA 2024)
+    "BOS",  # Boston Bruins
+    "BUF",  # Buffalo Sabres
+    "CAR",  # Carolina Hurricanes
+    "CBJ",  # Columbus Blue Jackets
+    "CGY",  # Calgary Flames
+    "CHI",  # Chicago Blackhawks
+    "COL",  # Colorado Avalanche
+    "DAL",  # Dallas Stars
+    "DET",  # Detroit Red Wings
+    "EDM",  # Edmonton Oilers
+    "FLA",  # Florida Panthers
+    "LAK",  # Los Angeles Kings
+    "MIN",  # Minnesota Wild
+    "MTL",  # Montreal Canadiens
+    "NJD",  # New Jersey Devils
+    "NSH",  # Nashville Predators
+    "NYI",  # New York Islanders
+    "NYR",  # New York Rangers
+    "OTT",  # Ottawa Senators
+    "PHI",  # Philadelphia Flyers
+    "PIT",  # Pittsburgh Penguins
+    "SEA",  # Seattle Kraken
+    "SJS",  # San Jose Sharks
+    "STL",  # St. Louis Blues
+    "TBL",  # Tampa Bay Lightning
+    "TOR",  # Toronto Maple Leafs
+    "UTA",  # Utah Hockey Club (formerly Arizona Coyotes)
+    "VAN",  # Vancouver Canucks
+    "VGK",  # Vegas Golden Knights
+    "WPG",  # Winnipeg Jets
+    "WSH",  # Washington Capitals
+)
+
+# All team abbreviations including historical (for historical queries)
+ALL_TEAM_ABBREVS: tuple[str, ...] = (
+    "ANA",  # Anaheim Ducks
+    "ARI",  # Arizona Coyotes (historical, relocated to UTA 2024)
     "BOS",  # Boston Bruins
     "BUF",  # Buffalo Sabres
     "CAR",  # Carolina Hurricanes
@@ -207,6 +309,10 @@ NHL_TEAM_ABBREVS: tuple[str, ...] = (
     "WPG",  # Winnipeg Jets
     "WSH",  # Washington Capitals
 )
+
+# Legacy alias for backwards compatibility
+# Deprecated: Use CURRENT_TEAM_ABBREVS for current season or get_teams_for_season()
+NHL_TEAM_ABBREVS = CURRENT_TEAM_ABBREVS
 
 
 class RosterDownloader(BaseDownloader):

@@ -36,11 +36,16 @@ from nhl_api.downloaders.sources.nhl_json.player_landing import (
     SkaterSeasonStats,
 )
 from nhl_api.downloaders.sources.nhl_json.roster import (
+    ALL_TEAM_ABBREVS,
+    CURRENT_TEAM_ABBREVS,
     NHL_TEAM_ABBREVS,
+    TEAM_RELOCATIONS,
     ParsedRoster,
     PlayerInfo,
     RosterDownloader,
     create_roster_downloader,
+    get_teams_for_season,
+    resolve_team_abbrev,
 )
 from nhl_api.downloaders.sources.nhl_json.schedule import ScheduleDownloader
 from nhl_api.downloaders.sources.nhl_json.standings import (
@@ -53,7 +58,9 @@ from nhl_api.downloaders.sources.nhl_json.standings import (
 )
 
 __all__ = [
+    "ALL_TEAM_ABBREVS",
     "BoxscoreDownloader",
+    "CURRENT_TEAM_ABBREVS",
     "DraftDetails",
     "EventPlayer",
     "GameEvent",
@@ -85,9 +92,12 @@ __all__ = [
     "SkaterSeasonStats",
     "StandingsDownloader",
     "StreakInfo",
+    "TEAM_RELOCATIONS",
     "TeamStandings",
     "create_play_by_play_downloader",
     "create_player_game_log_downloader",
     "create_roster_downloader",
     "create_standings_downloader",
+    "get_teams_for_season",
+    "resolve_team_abbrev",
 ]
