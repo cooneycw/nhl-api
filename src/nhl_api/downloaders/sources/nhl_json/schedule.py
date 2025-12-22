@@ -222,6 +222,47 @@ class ScheduleDownloader(BaseDownloader):
         logger.info("Found %d games for %s", len(games), date_str)
         return games
 
+    async def get_schedule_for_week(self, anchor_date: date) -> list[GameInfo]:
+        """Get all games for the week containing the anchor date.
+
+        The NHL API returns a full week of games when querying any date.
+        This method extracts ALL days from the gameWeek response.
+
+        Args:
+            anchor_date: Any date in the week to fetch
+
+        Returns:
+            List of GameInfo objects for all games in that week
+        """
+        date_str = anchor_date.isoformat()
+        logger.debug("Fetching week schedule anchored at %s", date_str)
+
+        response = await self._get(f"schedule/{date_str}")
+
+        if not response.is_success:
+            raise DownloadError(
+                f"Failed to fetch schedule for {date_str}: HTTP {response.status}",
+                source=self.source_name,
+            )
+
+        data = response.json()
+        games: list[GameInfo] = []
+
+        # Parse games from ALL days in gameWeek structure
+        for day in data.get("gameWeek", []):
+            for game_data in day.get("games", []):
+                try:
+                    games.append(_parse_game(game_data))
+                except Exception as e:
+                    logger.warning(
+                        "Failed to parse game: %s - %s",
+                        game_data.get("id"),
+                        e,
+                    )
+
+        logger.debug("Found %d games for week of %s", len(games), date_str)
+        return games
+
     async def get_season_schedule(
         self,
         season_id: int,
@@ -258,9 +299,10 @@ class ScheduleDownloader(BaseDownloader):
 
         while current_date <= season_end:
             try:
-                date_games = await self.get_schedule_for_date(current_date)
+                # Use get_schedule_for_week to fetch all games in the week
+                week_games = await self.get_schedule_for_week(current_date)
 
-                for game in date_games:
+                for game in week_games:
                     # Filter by game type if specified
                     if game_type is not None and game.game_type != game_type:
                         continue

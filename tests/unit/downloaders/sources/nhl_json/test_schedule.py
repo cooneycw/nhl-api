@@ -241,6 +241,88 @@ class TestScheduleDownloader:
 
         assert len(result) == 0
 
+    async def test_get_schedule_for_week(
+        self,
+        downloader: ScheduleDownloader,
+        mock_http_client: MagicMock,
+    ) -> None:
+        """Test fetching schedule for a full week (all days from gameWeek)."""
+        mock_response = MagicMock()
+        mock_response.is_success = True
+        mock_response.is_rate_limited = False
+        mock_response.is_server_error = False
+        mock_response.status = 200
+        mock_response.retry_after = None
+        # Simulate a week with games on multiple days
+        mock_response.json.return_value = {
+            "gameWeek": [
+                {
+                    "date": "2024-12-16",
+                    "games": [
+                        {
+                            "id": 2024020500,
+                            "season": 20242025,
+                            "gameType": 2,
+                            "startTimeUTC": "2024-12-17T00:00:00Z",
+                            "homeTeam": {"id": 1, "abbrev": "NJD"},
+                            "awayTeam": {"id": 2, "abbrev": "NYI"},
+                            "gameState": "OFF",
+                        },
+                    ],
+                },
+                {
+                    "date": "2024-12-17",
+                    "games": [
+                        {
+                            "id": 2024020510,
+                            "season": 20242025,
+                            "gameType": 2,
+                            "startTimeUTC": "2024-12-18T00:00:00Z",
+                            "homeTeam": {"id": 3, "abbrev": "NYR"},
+                            "awayTeam": {"id": 4, "abbrev": "PHI"},
+                            "gameState": "OFF",
+                        },
+                        {
+                            "id": 2024020511,
+                            "season": 20242025,
+                            "gameType": 2,
+                            "startTimeUTC": "2024-12-18T01:00:00Z",
+                            "homeTeam": {"id": 5, "abbrev": "PIT"},
+                            "awayTeam": {"id": 6, "abbrev": "BOS"},
+                            "gameState": "OFF",
+                        },
+                    ],
+                },
+                {
+                    "date": "2024-12-18",
+                    "games": [
+                        {
+                            "id": 2024020520,
+                            "season": 20242025,
+                            "gameType": 2,
+                            "startTimeUTC": "2024-12-19T00:00:00Z",
+                            "homeTeam": {"id": 7, "abbrev": "BUF"},
+                            "awayTeam": {"id": 8, "abbrev": "OTT"},
+                            "gameState": "OFF",
+                        },
+                    ],
+                },
+            ]
+        }
+        mock_http_client.get.return_value = mock_response
+
+        # Should get ALL games from all days, not just the anchor date
+        result = await downloader.get_schedule_for_week(date(2024, 12, 17))
+
+        # 1 + 2 + 1 = 4 games across 3 days
+        assert len(result) == 4
+        game_ids = [g.game_id for g in result]
+        assert 2024020500 in game_ids  # Dec 16
+        assert 2024020510 in game_ids  # Dec 17
+        assert 2024020511 in game_ids  # Dec 17
+        assert 2024020520 in game_ids  # Dec 18
+        mock_http_client.get.assert_called_once()
+
 
 @pytest.mark.unit
 class TestCreateScheduleDownloader:
