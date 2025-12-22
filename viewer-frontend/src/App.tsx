@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
 import { Dashboard } from '@/pages/Dashboard'
 import { Downloads } from '@/pages/Downloads'
+import { Coverage } from '@/pages/Coverage'
 import { Players } from '@/pages/Players'
 import { PlayerDetail } from '@/pages/PlayerDetail'
 import { Games } from '@/pages/Games'
@@ -18,6 +19,7 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="downloads" element={<Downloads />} />
+          <Route path="coverage" element={<Coverage />} />
           <Route path="players" element={<Players />} />
           <Route path="players/:playerId" element={<PlayerDetail />} />
           <Route path="games" element={<Games />} />
