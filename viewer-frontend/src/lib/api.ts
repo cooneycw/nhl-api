@@ -181,3 +181,28 @@ export interface RetryResponse {
   status: string
   message: string
 }
+
+// Coverage types
+export interface CategoryCoverage {
+  name: string
+  display_name: string
+  actual: number
+  expected: number
+  percentage: number | null
+  link_path: string
+}
+
+export interface SeasonCoverage {
+  season_id: number
+  season_label: string
+  is_current: boolean
+  categories: CategoryCoverage[]
+  game_logs_total: number
+  players_with_game_logs: number
+  refreshed_at: string | null
+}
+
+export interface CoverageResponse {
+  seasons: SeasonCoverage[]
+  refreshed_at: string | null
+}
