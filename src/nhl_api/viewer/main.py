@@ -29,6 +29,7 @@ from nhl_api.services.db import DatabaseService
 from nhl_api.viewer.config import get_settings
 from nhl_api.viewer.dependencies import set_db_service
 from nhl_api.viewer.routers import (
+    coverage,
     downloads,
     entities,
     health,
@@ -102,8 +103,8 @@ def create_app() -> FastAPI:
         description=settings.api_description,
         version=settings.api_version,
         lifespan=lifespan,
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url=None,  # Custom docs with navbar
+        redoc_url=None,  # Custom redoc with navbar
         openapi_url="/openapi.json",
     )
 
@@ -118,6 +119,7 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(health.router)
+    app.include_router(coverage.router, prefix=f"/api/{settings.api_version}")
     app.include_router(downloads.router, prefix=f"/api/{settings.api_version}")
     app.include_router(monitoring.router, prefix=f"/api/{settings.api_version}")
     app.include_router(entities.router, prefix=f"/api/{settings.api_version}")
@@ -312,6 +314,161 @@ def create_app() -> FastAPI:
 </body>
 </html>
 """
+
+    # Shared navbar HTML for docs pages
+    def get_navbar_html(active_page: str = "") -> str:
+        """Generate navbar HTML with active state."""
+
+        def link_class(page: str) -> str:
+            return "active" if page == active_page else ""
+
+        return f"""
+        <nav style="
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 0 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 9999;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        ">
+            <div style="
+                max-width: 1200px;
+                margin: 0 auto;
+                display: flex;
+                align-items: center;
+                height: 60px;
+                gap: 2rem;
+            ">
+                <a href="/" style="
+                    font-size: 1.25rem;
+                    font-weight: 700;
+                    color: #60a5fa;
+                    text-decoration: none;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                ">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                    </svg>
+                    NHL Data Viewer
+                </a>
+                <ul style="
+                    display: flex;
+                    gap: 0.5rem;
+                    list-style: none;
+                    margin: 0;
+                    padding: 0;
+                ">
+                    <li><a href="/" style="
+                        color: {"#60a5fa" if link_class("home") else "#94a3b8"};
+                        text-decoration: none;
+                        padding: 0.5rem 1rem;
+                        border-radius: 6px;
+                        font-size: 0.9rem;
+                        background: {"rgba(96, 165, 250, 0.2)" if link_class("home") else "transparent"};
+                    ">Home</a></li>
+                    <li><a href="/docs" style="
+                        color: {"#60a5fa" if link_class("docs") else "#94a3b8"};
+                        text-decoration: none;
+                        padding: 0.5rem 1rem;
+                        border-radius: 6px;
+                        font-size: 0.9rem;
+                        background: {"rgba(96, 165, 250, 0.2)" if link_class("docs") else "transparent"};
+                    ">API Docs</a></li>
+                    <li><a href="/redoc" style="
+                        color: {"#60a5fa" if link_class("redoc") else "#94a3b8"};
+                        text-decoration: none;
+                        padding: 0.5rem 1rem;
+                        border-radius: 6px;
+                        font-size: 0.9rem;
+                        background: {"rgba(96, 165, 250, 0.2)" if link_class("redoc") else "transparent"};
+                    ">ReDoc</a></li>
+                    <li><a href="/health" style="
+                        color: {"#60a5fa" if link_class("health") else "#94a3b8"};
+                        text-decoration: none;
+                        padding: 0.5rem 1rem;
+                        border-radius: 6px;
+                        font-size: 0.9rem;
+                        background: {"rgba(96, 165, 250, 0.2)" if link_class("health") else "transparent"};
+                    ">Health</a></li>
+                    <li><a href="http://localhost:5173" target="_blank" style="
+                        color: #94a3b8;
+                        text-decoration: none;
+                        padding: 0.5rem 1rem;
+                        border-radius: 6px;
+                        font-size: 0.9rem;
+                    ">Frontend ↗</a></li>
+                </ul>
+            </div>
+        </nav>
+        """
+
+    # Custom Swagger UI with navbar
+    @app.get("/docs", include_in_schema=False)
+    async def custom_swagger_ui() -> HTMLResponse:
+        """Swagger UI with navigation bar."""
+        navbar = get_navbar_html("docs")
+        return HTMLResponse(
+            f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{settings.api_title} - Swagger UI</title>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+    <style>
+        body {{ margin: 0; padding: 0; }}
+        .swagger-ui .topbar {{ display: none; }}
+    </style>
+</head>
+<body>
+    {navbar}
+    <div id="swagger-ui"></div>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script>
+        window.onload = function() {{
+            SwaggerUIBundle({{
+                url: "/openapi.json",
+                dom_id: '#swagger-ui',
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIBundle.SwaggerUIStandalonePreset
+                ],
+                layout: "StandaloneLayout"
+            }});
+        }};
+    </script>
+</body>
+</html>
+"""
+        )
+
+    # Custom ReDoc with navbar
+    @app.get("/redoc", include_in_schema=False)
+    async def custom_redoc() -> HTMLResponse:
+        """ReDoc with navigation bar."""
+        navbar = get_navbar_html("redoc")
+        return HTMLResponse(
+            f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{settings.api_title} - ReDoc</title>
+    <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
+    <style>
+        body {{ margin: 0; padding: 0; }}
+    </style>
+</head>
+<body>
+    {navbar}
+    <redoc spec-url='/openapi.json'></redoc>
+    <script src="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.js"></script>
+</body>
+</html>
+"""
+        )
 
     # API info endpoint
     @app.get(f"/api/{settings.api_version}/info")

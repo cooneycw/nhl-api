@@ -47,18 +47,52 @@ export const api = {
 }
 
 // API response types
+export interface DatabaseHealth {
+  connected: boolean
+  latency_ms: number
+  error: string | null
+}
+
 export interface HealthResponse {
   status: string
-  database: string
+  version: string
+  uptime_seconds: number
   timestamp: string
+  database: DatabaseHealth
+}
+
+// Fetch health from /health endpoint (not under /api/v1)
+export async function fetchHealth(): Promise<HealthResponse> {
+  const response = await fetch('/health')
+  if (!response.ok) {
+    throw new ApiError(response.status, response.statusText)
+  }
+  return response.json()
 }
 
 export interface DashboardStats {
   active_batches: number
-  total_downloads: number
-  success_rate: number
-  failed_count: number
-  last_activity: string
+  completed_today: number
+  failed_today: number
+  success_rate_24h: number | null
+  total_items_24h: number
+  sources_healthy: number
+  sources_degraded: number
+  sources_error: number
+}
+
+export interface RecentFailure {
+  progress_id: number
+  source_name: string
+  item_key: string
+  error_message: string | null
+  last_attempt_at: string | null
+}
+
+export interface DashboardResponse {
+  stats: DashboardStats
+  recent_failures: RecentFailure[]
+  timestamp: string
 }
 
 export interface BatchSummary {
@@ -133,4 +167,33 @@ export interface TimeseriesResponse {
   period: TimeseriesPeriod
   data: TimeseriesDataPoint[]
   generated_at: string
+}
+
+// Failure types
+export interface FailedDownload {
+  progress_id: number
+  batch_id: number | null
+  source_id: number
+  source_name: string
+  source_type: string
+  season_id: number | null
+  item_key: string
+  status: string
+  attempts: number
+  last_attempt_at: string | null
+  error_message: string | null
+}
+
+export interface FailureListResponse {
+  total: number
+  page: number
+  page_size: number
+  pages: number
+  failures: FailedDownload[]
+}
+
+export interface RetryResponse {
+  progress_id: number
+  status: string
+  message: string
 }

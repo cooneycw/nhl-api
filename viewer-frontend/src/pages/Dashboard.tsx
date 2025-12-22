@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useHealth } from '@/hooks/useApi'
 import { Activity, Database, Clock, CheckCircle, XCircle } from 'lucide-react'
-import { ProgressChart, SourceHealthGrid } from '@/components/monitoring'
+import { ProgressChart, DashboardStats, SourceHealthGrid, FailureTable } from '@/components/monitoring'
 
 export function Dashboard() {
   const { data: health, isLoading, error } = useHealth()
@@ -51,15 +51,25 @@ export function Dashboard() {
               <Skeleton className="h-8 w-24" />
             ) : (
               <div className="flex items-center space-x-2">
-                {health?.database === 'connected' ? (
+                {health?.database?.connected ? (
                   <>
                     <CheckCircle className="h-5 w-5 text-green-500" />
                     <span className="text-lg font-bold">Connected</span>
+                    {health.database.latency_ms !== undefined && (
+                      <span className="text-xs text-muted-foreground">
+                        ({health.database.latency_ms.toFixed(1)}ms)
+                      </span>
+                    )}
                   </>
                 ) : (
                   <>
                     <XCircle className="h-5 w-5 text-destructive" />
                     <span className="text-lg font-bold text-destructive">Disconnected</span>
+                    {health?.database?.error && (
+                      <span className="text-xs text-destructive">
+                        {health.database.error}
+                      </span>
+                    )}
                   </>
                 )}
               </div>
@@ -95,6 +105,12 @@ export function Dashboard() {
         </Card>
       </div>
 
+      {/* Download Stats Summary */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Download Stats</h2>
+        <DashboardStats />
+      </div>
+
       {/* Active Downloads placeholder */}
       <Card>
         <CardHeader>
@@ -115,6 +131,9 @@ export function Dashboard() {
 
       {/* Source Health Grid */}
       <SourceHealthGrid />
+
+      {/* Failure Table */}
+      <FailureTable />
     </div>
   )
 }
