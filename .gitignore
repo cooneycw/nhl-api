@@ -94,3 +94,6 @@ data/
 
 # Exclude HTML report files (test artifacts)
 data/**/*.HTM
+
+# Local symlinks to claude-power-pack
+scripts/worktree-remove.sh
