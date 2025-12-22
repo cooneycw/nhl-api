@@ -170,6 +170,17 @@ class CleanupResponse(BaseModel):
     message: str
 
 
+class DeleteSeasonResponse(BaseModel):
+    """Response after deleting season data."""
+
+    season_id: int
+    dry_run: bool
+    deleted_counts: dict[str, int]
+    total_records_deleted: int
+    execution_time_ms: float
+    message: str
+
+
 # =============================================================================
 # Sources
 # =============================================================================
