@@ -1,5 +1,10 @@
 """Pydantic schemas for viewer API responses."""
 
+from nhl_api.viewer.schemas.coverage import (
+    CategoryCoverage,
+    CoverageResponse,
+    SeasonCoverage,
+)
 from nhl_api.viewer.schemas.downloads import (
     ActiveDownload,
     ActiveDownloadsResponse,
@@ -51,6 +56,10 @@ from nhl_api.viewer.schemas.validation import (
 )
 
 __all__ = [
+    # Coverage
+    "CategoryCoverage",
+    "CoverageResponse",
+    "SeasonCoverage",
     # Downloads
     "ActiveDownload",
     "ActiveDownloadsResponse",
