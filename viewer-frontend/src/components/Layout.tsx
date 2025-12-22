@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { Activity, Download, Users, Calendar, CheckCircle, Shield, Menu, Fuel } from 'lucide-react'
+import { Activity, Download, Users, Calendar, CheckCircle, Shield, Menu, Fuel, HelpCircle } from 'lucide-react'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,6 +20,7 @@ const navigation = [
   { name: 'Teams', href: '/teams', icon: Shield },
   { name: 'Players', href: '/players', icon: Users },
   { name: 'Validation', href: '/validation', icon: CheckCircle },
+  { name: 'Help', href: '/help', icon: HelpCircle },
 ]
 
 export function Layout() {

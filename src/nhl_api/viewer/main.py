@@ -19,11 +19,12 @@ from __future__ import annotations
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from nhl_api.services.db import DatabaseService
 from nhl_api.viewer.config import get_settings
@@ -126,6 +127,25 @@ def create_app() -> FastAPI:
     app.include_router(reconciliation.router, prefix=f"/api/{settings.api_version}")
     app.include_router(validation.router, prefix=f"/api/{settings.api_version}")
 
+    # Favicon endpoint - serve from viewer-frontend/public
+    favicon_path = (
+        Path(__file__).parent.parent.parent.parent
+        / "viewer-frontend"
+        / "public"
+        / "favicon.svg"
+    )
+
+    @app.get("/favicon.svg", include_in_schema=False)
+    async def favicon() -> FileResponse:
+        """Serve favicon."""
+        return FileResponse(favicon_path, media_type="image/svg+xml")
+
+    # Also serve as favicon.ico redirect for browsers that request it
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon_ico() -> FileResponse:
+        """Serve favicon (ico redirect)."""
+        return FileResponse(favicon_path, media_type="image/svg+xml")
+
     # Root endpoint - HTML landing page with navbar
     @app.get("/", response_class=HTMLResponse)
     async def root() -> str:
@@ -136,6 +156,7 @@ def create_app() -> FastAPI:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{settings.api_title}</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -417,6 +438,7 @@ def create_app() -> FastAPI:
 <html>
 <head>
     <title>{settings.api_title} - Swagger UI</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
     <style>
         body {{ margin: 0; padding: 0; }}
@@ -456,6 +478,7 @@ def create_app() -> FastAPI:
 <html>
 <head>
     <title>{settings.api_title} - ReDoc</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
     <style>
         body {{ margin: 0; padding: 0; }}

@@ -11,6 +11,7 @@ import { Teams } from '@/pages/Teams'
 import { TeamDetail } from '@/pages/TeamDetail'
 import { Validation } from '@/pages/Validation'
 import { GameReconciliation } from '@/pages/GameReconciliation'
+import { Help } from '@/pages/Help'
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
           <Route path="teams/:teamId" element={<TeamDetail />} />
           <Route path="validation" element={<Validation />} />
           <Route path="validation/game/:gameId" element={<GameReconciliation />} />
+          <Route path="help" element={<Help />} />
         </Route>
       </Routes>
     </BrowserRouter>
