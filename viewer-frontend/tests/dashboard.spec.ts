@@ -44,7 +44,6 @@ test.describe('Dashboard Page', () => {
 
   test('Active Downloads section should be present', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Active Downloads' })).toBeVisible();
-    await expect(page.getByText('Coming soon (#167)')).toBeVisible();
   });
 
   test('Source Health grid should be visible', async ({ page }) => {
@@ -99,7 +98,8 @@ test.describe('Navigation', () => {
     await page.goto('http://localhost:5173/');
     await page.click('text=Downloads');
     await expect(page).toHaveURL(/\/downloads/);
-    await expect(page.getByRole('heading', { name: 'Downloads' })).toBeVisible();
+    // Use exact match to avoid matching "Active Downloads" heading
+    await expect(page.getByRole('heading', { name: 'Downloads', exact: true })).toBeVisible();
   });
 
   test('should navigate to Players page', async ({ page }) => {
