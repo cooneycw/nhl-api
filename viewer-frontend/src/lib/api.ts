@@ -44,6 +44,19 @@ export const api = {
     })
     return handleResponse<T>(response)
   },
+
+  delete: async <T>(endpoint: string, params?: Record<string, string>): Promise<T> => {
+    const url = new URL(`${API_BASE_URL}${endpoint}`, window.location.origin)
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          url.searchParams.append(key, value)
+        }
+      })
+    }
+    const response = await fetch(url.toString(), { method: 'DELETE' })
+    return handleResponse<T>(response)
+  },
 }
 
 // API response types
@@ -195,6 +208,12 @@ export interface FailureListResponse {
 export interface RetryResponse {
   progress_id: number
   status: string
+  message: string
+}
+
+export interface CleanupResponse {
+  batches_deleted: number
+  downloads_deleted: number
   message: string
 }
 

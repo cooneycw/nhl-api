@@ -71,7 +71,7 @@ async def health_check(
     db_status = await _check_database(db)
 
     # Determine overall status
-    overall_status = "healthy" if db_status.connected else "degraded"
+    overall_status = "Healthy" if db_status.connected else "Degraded"
 
     return HealthResponse(
         status=overall_status,

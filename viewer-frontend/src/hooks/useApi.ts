@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, fetchHealth, type DashboardResponse, type BatchSummary, type SourceListResponse, type FailureListResponse, type RetryResponse, type TimeseriesResponse, type TimeseriesPeriod } from '@/lib/api'
+import { api, fetchHealth, type DashboardResponse, type BatchSummary, type SourceListResponse, type FailureListResponse, type RetryResponse, type CleanupResponse, type TimeseriesResponse, type TimeseriesPeriod } from '@/lib/api'
 
 // Health check - uses /health endpoint directly (not under /api/v1)
 export function useHealth() {
@@ -59,6 +59,22 @@ export function useRetryDownload() {
   return useMutation({
     mutationFn: (progressId: number) =>
       api.post<RetryResponse>(`/monitoring/failures/${progressId}/retry`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['monitoring'] })
+    },
+  })
+}
+
+// Cleanup failed batches
+export function useCleanupBatches() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (options?: { includeCompleted?: boolean; retentionDays?: number }) =>
+      api.delete<CleanupResponse>('/monitoring/cleanup', {
+        include_completed: options?.includeCompleted ? 'true' : 'false',
+        retention_days: String(options?.retentionDays ?? 7),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['monitoring'] })
     },

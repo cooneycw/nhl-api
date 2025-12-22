@@ -162,6 +162,14 @@ class RetryResponse(BaseModel):
     message: str
 
 
+class CleanupResponse(BaseModel):
+    """Response after cleanup operation."""
+
+    batches_deleted: int
+    downloads_deleted: int
+    message: str
+
+
 # =============================================================================
 # Sources
 # =============================================================================

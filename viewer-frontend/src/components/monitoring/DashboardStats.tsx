@@ -1,11 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useDashboard } from '@/hooks/useApi'
+import { useDashboard, useCleanupBatches } from '@/hooks/useApi'
 import {
   Loader2,
   CheckCircle,
   AlertTriangle,
   TrendingUp,
+  Trash2,
 } from 'lucide-react'
 
 function getSuccessRateColor(rate: number | null): string {
@@ -31,7 +33,14 @@ function StatCardSkeleton() {
 
 export function DashboardStats() {
   const { data, isLoading, isFetching } = useDashboard()
+  const cleanupMutation = useCleanupBatches()
   const stats = data?.stats
+
+  const handleCleanup = () => {
+    if (confirm('Delete all failed batches and their download records?')) {
+      cleanupMutation.mutate({})
+    }
+  }
 
   if (isLoading) {
     return (
@@ -97,17 +106,37 @@ export function DashboardStats() {
           />
         </CardHeader>
         <CardContent>
-          <div
-            className={`text-2xl font-bold ${
-              stats?.failed_today && stats.failed_today > 0 ? 'text-red-600' : ''
-            }`}
-          >
-            {stats?.failed_today ?? 0}
+          <div className="flex items-center justify-between">
+            <div
+              className={`text-2xl font-bold ${
+                stats?.failed_today && stats.failed_today > 0 ? 'text-red-600' : ''
+              }`}
+            >
+              {stats?.failed_today ?? 0}
+            </div>
+            {stats?.failed_today && stats.failed_today > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCleanup}
+                disabled={cleanupMutation.isPending}
+                className="h-7 px-2 text-xs border-red-300 text-red-600 hover:bg-red-100"
+              >
+                {cleanupMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3 w-3" />
+                )}
+                <span className="ml-1">Clean</span>
+              </Button>
+            )}
           </div>
           <p className="text-xs text-muted-foreground">
-            {stats?.failed_today && stats.failed_today > 0
-              ? 'Batches need attention'
-              : 'All batches healthy'}
+            {cleanupMutation.isSuccess
+              ? cleanupMutation.data?.message
+              : stats?.failed_today && stats.failed_today > 0
+                ? 'Batches need attention'
+                : 'All batches healthy'}
           </p>
         </CardContent>
       </Card>

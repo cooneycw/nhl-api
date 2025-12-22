@@ -21,6 +21,7 @@ from nhl_api.viewer.schemas.monitoring import (
     BatchDetail,
     BatchListResponse,
     BatchSummary,
+    CleanupResponse,
     DashboardResponse,
     DashboardStats,
     DownloadItem,
@@ -437,6 +438,104 @@ async def retry_failure(
         progress_id=progress_id,
         status="pending",
         message="Download queued for retry",
+    )
+
+
+@router.delete(
+    "/cleanup",
+    response_model=CleanupResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Cleanup Failed Batches",
+    description="Delete failed batches and their associated download records",
+)
+async def cleanup_failed_batches(
+    db: DbDep,
+    include_completed: bool = Query(
+        default=False,
+        description="Also delete completed batches older than retention days",
+    ),
+    retention_days: int = Query(
+        default=7, ge=1, le=365, description="Days to retain (for completed batches)"
+    ),
+) -> CleanupResponse:
+    """Delete failed batches and optionally old completed batches.
+
+    This removes:
+    - All failed batches and their download_progress records
+    - Optionally: completed batches older than retention_days
+    """
+    # First, delete download_progress records for failed batches
+    downloads_deleted = (
+        await db.fetchval(
+            """
+        DELETE FROM download_progress
+        WHERE batch_id IN (
+            SELECT batch_id FROM import_batches WHERE status = 'failed'
+        )
+        RETURNING COUNT(*)
+        """
+        )
+        or 0
+    )
+
+    # Delete failed batches
+    batches_deleted = (
+        await db.fetchval(
+            """
+        DELETE FROM import_batches
+        WHERE status = 'failed'
+        RETURNING COUNT(*)
+        """
+        )
+        or 0
+    )
+
+    # Optionally delete old completed batches
+    if include_completed:
+        old_downloads = (
+            await db.fetchval(
+                """
+            DELETE FROM download_progress
+            WHERE batch_id IN (
+                SELECT batch_id FROM import_batches
+                WHERE status = 'completed'
+                  AND completed_at < NOW() - INTERVAL '1 day' * $1
+            )
+            RETURNING COUNT(*)
+            """,
+                retention_days,
+            )
+            or 0
+        )
+        downloads_deleted += old_downloads
+
+        old_batches = (
+            await db.fetchval(
+                """
+            DELETE FROM import_batches
+            WHERE status = 'completed'
+              AND completed_at < NOW() - INTERVAL '1 day' * $1
+            RETURNING COUNT(*)
+            """,
+                retention_days,
+            )
+            or 0
+        )
+        batches_deleted += old_batches
+
+    # Refresh materialized views to update dashboard
+    await db.execute("SELECT refresh_viewer_views(concurrent := TRUE)")
+
+    message = (
+        f"Deleted {batches_deleted} batches and {downloads_deleted} download records"
+    )
+    if include_completed:
+        message += f" (including completed batches older than {retention_days} days)"
+
+    return CleanupResponse(
+        batches_deleted=batches_deleted,
+        downloads_deleted=downloads_deleted,
+        message=message,
     )
 
 
