@@ -26,16 +26,14 @@ class TestApiInfo:
         assert "title" in data
 
 
-class TestStubEndpoints:
-    """Tests for stub endpoints that are not yet implemented."""
+class TestValidationEndpoints:
+    """Tests for validation API endpoints."""
 
-    def test_validation_status_returns_coming_soon(
-        self, test_client: TestClient
-    ) -> None:
-        """Test validation status stub returns coming soon message."""
-        response = test_client.get("/api/v1/validation/status")
+    def test_validation_rules_returns_list(self, test_client: TestClient) -> None:
+        """Test validation rules endpoint returns list."""
+        response = test_client.get("/api/v1/validation/rules")
 
         assert response.status_code == 200
         data = response.json()
-        assert "message" in data
-        assert "coming soon" in data["message"].lower()
+        assert "rules" in data
+        assert "total" in data

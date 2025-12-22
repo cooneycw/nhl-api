@@ -12,7 +12,13 @@ from fastapi.testclient import TestClient
 
 from nhl_api.viewer.config import get_settings
 from nhl_api.viewer.dependencies import set_db_service
-from nhl_api.viewer.routers import entities, health, monitoring, validation
+from nhl_api.viewer.routers import (
+    entities,
+    health,
+    monitoring,
+    reconciliation,
+    validation,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -55,6 +61,7 @@ def test_client(mock_db_service: MagicMock) -> Generator[TestClient, None, None]
     app.include_router(health.router)
     app.include_router(monitoring.router, prefix="/api/v1")
     app.include_router(entities.router, prefix="/api/v1")
+    app.include_router(reconciliation.router, prefix="/api/v1")
     app.include_router(validation.router, prefix="/api/v1")
 
     @app.get("/api/v1/info")
