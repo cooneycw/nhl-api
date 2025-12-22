@@ -68,8 +68,8 @@ class MockTeamBoxscore:
         abbrev: str = "BOS",
         score: int = 3,
         shots_on_goal: int = 30,
-        skaters: list | None = None,
-        goalies: list | None = None,
+        skaters: list[Any] | None = None,
+        goalies: list[Any] | None = None,
     ):
         self.abbrev = abbrev
         self.score = score
@@ -85,10 +85,10 @@ class MockParsedBoxscore:
         self,
         home_team: MockTeamBoxscore | None = None,
         away_team: MockTeamBoxscore | None = None,
-        home_skaters: list | None = None,
-        away_skaters: list | None = None,
-        home_goalies: list | None = None,
-        away_goalies: list | None = None,
+        home_skaters: list[Any] | None = None,
+        away_skaters: list[Any] | None = None,
+        home_goalies: list[Any] | None = None,
+        away_goalies: list[Any] | None = None,
         game_id: int = 2024020500,
     ):
         self.home_team = home_team or MockTeamBoxscore()

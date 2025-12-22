@@ -49,8 +49,8 @@ class MockTeamEventSummary:
         self,
         team_name: str = "Boston",
         team_abbrev: str = "BOS",
-        players: list | None = None,
-        totals: dict | None = None,
+        players: list[Any] | None = None,
+        totals: dict[Any, Any] | None = None,
     ):
         self.team_name = team_name
         self.team_abbrev = team_abbrev
@@ -213,7 +213,7 @@ class MockParsedGameSummary:
         self,
         home_team: MockTeamInfo | None = None,
         away_team: MockTeamInfo | None = None,
-        goals: list | None = None,
+        goals: list[Any] | None = None,
         game_id: int = 2024020500,
     ):
         self.home_team = home_team or MockTeamInfo()

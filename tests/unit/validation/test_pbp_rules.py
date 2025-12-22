@@ -36,7 +36,7 @@ class MockGameEvent:
         away_sog: int = 3,
         x_coord: float | None = 50.0,
         y_coord: float | None = 20.0,
-        players: list | None = None,
+        players: list[Any] | None = None,
     ):
         self.event_id = event_id
         self.event_type = event_type
