@@ -99,34 +99,36 @@ test.describe('Navigation', () => {
     await page.goto('http://localhost:5173/');
     await page.click('text=Downloads');
     await expect(page).toHaveURL(/\/downloads/);
-    await expect(page.getByRole('heading', { name: 'Downloads' })).toBeVisible();
+    // Use exact: true to match only h1, not "Active Downloads" h3
+    await expect(page.getByRole('heading', { name: 'Downloads', exact: true })).toBeVisible();
   });
 
   test('should navigate to Players page', async ({ page }) => {
     await page.goto('http://localhost:5173/');
     await page.click('text=Players');
     await expect(page).toHaveURL(/\/players/);
-    await expect(page.getByRole('heading', { name: 'Players' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Players', exact: true })).toBeVisible();
   });
 
   test('should navigate to Games page', async ({ page }) => {
     await page.goto('http://localhost:5173/');
     await page.click('text=Games');
     await expect(page).toHaveURL(/\/games/);
-    await expect(page.getByRole('heading', { name: 'Games' })).toBeVisible();
+    // Page title is "Games", card title changed to "Game Schedule"
+    await expect(page.getByRole('heading', { name: 'Games', exact: true })).toBeVisible();
   });
 
   test('should navigate to Teams page', async ({ page }) => {
     await page.goto('http://localhost:5173/');
     await page.click('text=Teams');
     await expect(page).toHaveURL(/\/teams/);
-    await expect(page.getByRole('heading', { name: 'Teams' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Teams', exact: true })).toBeVisible();
   });
 
   test('should navigate to Validation page', async ({ page }) => {
     await page.goto('http://localhost:5173/');
     await page.click('text=Validation');
     await expect(page).toHaveURL(/\/validation/);
-    await expect(page.getByRole('heading', { name: 'Validation' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Data Validation', exact: true })).toBeVisible();
   });
 });

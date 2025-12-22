@@ -208,7 +208,7 @@ export function Games() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle>Games</CardTitle>
+            <CardTitle>Game Schedule</CardTitle>
             <CardDescription>
               {pagination
                 ? `Showing ${(pagination.page - 1) * pagination.per_page + 1}-${Math.min(
