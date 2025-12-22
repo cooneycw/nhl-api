@@ -106,11 +106,11 @@ export function GameReconciliation() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-green-600 text-lg px-3 py-1">
+          <Badge variant="success" className="text-lg px-3 py-1">
             <CheckCircle2 className="mr-1 h-4 w-4" />
             {game.checks_passed} passed
           </Badge>
-          <Badge variant="outline" className="text-red-600 text-lg px-3 py-1">
+          <Badge variant="error" className="text-lg px-3 py-1">
             <XCircle className="mr-1 h-4 w-4" />
             {game.checks_failed} failed
           </Badge>
@@ -150,7 +150,7 @@ export function GameReconciliation() {
           <CardContent>
             <div className="flex flex-wrap gap-2">
               {game.sources_missing.map((source) => (
-                <Badge key={source} variant="outline" className="text-yellow-600">
+                <Badge key={source} variant="warning">
                   {source}
                 </Badge>
               ))}
@@ -267,7 +267,7 @@ export function GameReconciliation() {
                     {passedChecks.map((check, i) => (
                       <TableRow key={i}>
                         <TableCell className="font-medium">
-                          <Badge variant="outline" className="text-green-600 font-normal">
+                          <Badge variant="success" className="font-normal">
                             {check.rule_name}
                           </Badge>
                         </TableCell>

@@ -83,11 +83,11 @@ export function Validation() {
 
   const getStatusBadge = (passRate: number) => {
     if (passRate >= 0.95) {
-      return <Badge className="bg-green-500/10 text-green-600 hover:bg-green-500/20">Excellent</Badge>
+      return <Badge variant="success">Excellent</Badge>
     } else if (passRate >= 0.80) {
-      return <Badge className="bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20">Good</Badge>
+      return <Badge variant="warning">Good</Badge>
     } else {
-      return <Badge className="bg-red-500/10 text-red-600 hover:bg-red-500/20">Needs Review</Badge>
+      return <Badge variant="error">Needs Review</Badge>
     }
   }
 
