@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useHealth } from '@/hooks/useApi'
 import { Activity, Database, Clock, CheckCircle, XCircle } from 'lucide-react'
-import { SourceHealthGrid } from '@/components/monitoring'
+import { ProgressChart, SourceHealthGrid } from '@/components/monitoring'
 
 export function Dashboard() {
   const { data: health, isLoading, error } = useHealth()
@@ -109,6 +109,9 @@ export function Dashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Progress Chart (#170) */}
+      <ProgressChart />
 
       {/* Source Health Grid */}
       <SourceHealthGrid />

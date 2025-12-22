@@ -118,3 +118,19 @@ export interface PaginatedResponse<T> {
   per_page: number
   pages: number
 }
+
+// Timeseries types
+export type TimeseriesPeriod = '24h' | '7d' | '30d'
+
+export interface TimeseriesDataPoint {
+  timestamp: string
+  success_count: number
+  failure_count: number
+  total_count: number
+}
+
+export interface TimeseriesResponse {
+  period: TimeseriesPeriod
+  data: TimeseriesDataPoint[]
+  generated_at: string
+}
