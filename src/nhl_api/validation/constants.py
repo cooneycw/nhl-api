@@ -49,7 +49,11 @@ SOURCE_HTML_FS = "html_faceoff_summary"
 SOURCE_HTML_SS = "html_shot_summary"
 SOURCE_HTML_TOI = "html_time_on_ice"
 
-# Cross-source validation
+# Cross-source validation (JSON vs JSON)
 SOURCE_CROSS = "cross_source"
 CROSS_SOURCE_SHOT_TOLERANCE = 2  # Allow +/-2 shots between PBP and Boxscore
 CROSS_SOURCE_SHIFT_COUNT_TOLERANCE = 1  # Allow +/-1 shift difference
+
+# Cross-source validation (JSON vs HTML)
+CROSS_SOURCE_JSON_VS_HTML = "json_vs_html"
+SHOT_ZONE_TOLERANCE = 2  # Allow ±2 shots per zone
