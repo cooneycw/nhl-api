@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, type HealthResponse, type DashboardStats, type BatchSummary, type SourceHealth, type SourceListResponse } from '@/lib/api'
+import { api, type HealthResponse, type DashboardResponse, type BatchSummary, type SourceListResponse } from '@/lib/api'
 
 // Health check
 export function useHealth() {
@@ -14,7 +14,7 @@ export function useHealth() {
 export function useDashboard() {
   return useQuery({
     queryKey: ['monitoring', 'dashboard'],
-    queryFn: () => api.get<DashboardStats>('/monitoring/dashboard'),
+    queryFn: () => api.get<DashboardResponse>('/monitoring/dashboard'),
     refetchInterval: 10000, // 10 seconds for real-time updates
   })
 }

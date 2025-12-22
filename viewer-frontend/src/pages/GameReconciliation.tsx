@@ -60,17 +60,6 @@ export function GameReconciliation() {
   const passedChecks = game.all_checks.filter((c) => c.passed)
   const failedChecks = game.all_checks.filter((c) => !c.passed)
 
-  // Group checks by type
-  const checksByType = game.all_checks.reduce(
-    (acc, check) => {
-      const type = check.rule_name.split('_')[0] || 'other'
-      if (!acc[type]) acc[type] = []
-      acc[type].push(check)
-      return acc
-    },
-    {} as Record<string, typeof game.all_checks>
-  )
-
   const formatValue = (value: unknown): string => {
     if (value === null || value === undefined) return '-'
     if (typeof value === 'number') return value.toLocaleString()

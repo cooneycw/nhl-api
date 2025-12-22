@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useHealth } from '@/hooks/useApi'
 import { Activity, Database, Clock, CheckCircle, XCircle } from 'lucide-react'
-import { SourceHealthGrid } from '@/components/monitoring'
+import { DashboardStats, SourceHealthGrid } from '@/components/monitoring'
 
 export function Dashboard() {
   const { data: health, isLoading, error } = useHealth()
@@ -93,6 +93,12 @@ export function Dashboard() {
             <Badge variant="secondary">Development</Badge>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Download Stats Summary */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Download Stats</h2>
+        <DashboardStats />
       </div>
 
       {/* Active Downloads placeholder */}

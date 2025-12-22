@@ -55,10 +55,27 @@ export interface HealthResponse {
 
 export interface DashboardStats {
   active_batches: number
-  total_downloads: number
-  success_rate: number
-  failed_count: number
-  last_activity: string
+  completed_today: number
+  failed_today: number
+  success_rate_24h: number | null
+  total_items_24h: number
+  sources_healthy: number
+  sources_degraded: number
+  sources_error: number
+}
+
+export interface RecentFailure {
+  progress_id: number
+  source_name: string
+  item_key: string
+  error_message: string | null
+  last_attempt_at: string | null
+}
+
+export interface DashboardResponse {
+  stats: DashboardStats
+  recent_failures: RecentFailure[]
+  timestamp: string
 }
 
 export interface BatchSummary {
