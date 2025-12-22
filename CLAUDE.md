@@ -19,10 +19,33 @@ This project uses Claude Power Pack. Available commands:
 
 Use second-opinion MCP for code review when needed.
 
+### Session Coordination
+
+Multi-session locking prevents conflicts when running parallel Claude Code sessions:
+
+```bash
+# Check active locks and sessions
+~/.claude/scripts/session-lock.sh list
+~/.claude/scripts/session-register.sh status
+
+# Run pytest with coordination (prevents test interference)
+~/.claude/scripts/pytest-locked.sh -m unit --no-cov
+```
+
+**Key locks:**
+- `pytest-nhl-api` - Coordinates test runs across sessions
+- `pr-nhl-api-*` - Prevents duplicate PR creation
+- `merge-nhl-api-main` - Coordinates merges to main
+
+See [ISSUE_DRIVEN_DEVELOPMENT.md](../claude-power-pack/ISSUE_DRIVEN_DEVELOPMENT.md) in claude-power-pack for full documentation.
+
 ## Project-Specific Commands
 
-- `/nhl-next` - Scan GitHub issues and worktree state, recommend prioritized next steps (uses Plan Mode)
-- `/viewer` - Start the NHL Data Viewer backend (add `--full` for frontend, `--stop` to stop)
+| Command | Purpose |
+|---------|---------|
+| `/nhl-next` | Scan issues, worktrees, and **active sessions** to recommend next steps (Plan Mode) |
+| `/nhl-lite` | Quick project reference with session coordination status (~500 tokens) |
+| `/viewer` | Start NHL Data Viewer (`--full` for frontend, `--stop` to stop) |
 
 ---
 

@@ -35,6 +35,10 @@ coverage.xml
 *.py,cover
 .hypothesis/
 
+# Playwright
+playwright-report/
+test-results/
+
 # mypy
 .mypy_cache/
 .dmypy.json
