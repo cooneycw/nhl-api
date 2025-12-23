@@ -68,6 +68,8 @@ SOURCE_DISPLAY_NAMES = {
     "dailyfaceoff_penalty_kill": "Penalty Kill Units",
     "dailyfaceoff_injuries": "Injuries",
     "dailyfaceoff_starting_goalies": "Starting Goalies",
+    # QuantHockey sources
+    "quanthockey_player_stats": "Player Season Stats",
 }
 
 

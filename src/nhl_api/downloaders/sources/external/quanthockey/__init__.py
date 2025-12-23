@@ -11,11 +11,13 @@ from nhl_api.downloaders.sources.external.quanthockey.career_stats import (
     QuantHockeyCareerStatsDownloader,
 )
 from nhl_api.downloaders.sources.external.quanthockey.player_stats import (
+    QuantHockeyConfig,
     QuantHockeyPlayerStatsDownloader,
 )
 
 __all__ = [
     "CareerStatCategory",
     "QuantHockeyCareerStatsDownloader",
+    "QuantHockeyConfig",
     "QuantHockeyPlayerStatsDownloader",
 ]

@@ -7,6 +7,7 @@ from nhl_api.viewer.routers import (
     entities,
     health,
     monitoring,
+    quanthockey,
     reconciliation,
     validation,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "entities",
     "health",
     "monitoring",
+    "quanthockey",
     "reconciliation",
     "validation",
 ]

@@ -446,3 +446,184 @@ class QuantHockeyPlayerStatsDownloader(BaseExternalDownloader):
             players=players,
             download_timestamp=datetime.now(UTC).isoformat(),
         )
+
+    # =========================================================================
+    # Database Persistence
+    # =========================================================================
+
+    async def persist(
+        self,
+        db: Any,  # DatabaseService
+        players: list[QuantHockeyPlayerSeasonStats],
+        season_id: int,
+        snapshot_date: Any,  # date type
+    ) -> int:
+        """Persist player statistics to the database.
+
+        Uses upsert (INSERT ... ON CONFLICT) to handle re-downloads gracefully.
+
+        Args:
+            db: Database service instance
+            players: List of player statistics to persist
+            season_id: NHL season ID (e.g., 20242025)
+            snapshot_date: Date of the snapshot
+
+        Returns:
+            Number of player records upserted
+        """
+        if not players:
+            return 0
+
+        count = 0
+        fetched_at = datetime.now(UTC)
+
+        for player in players:
+            try:
+                await db.execute(
+                    """
+                    INSERT INTO qh_player_season_stats (
+                        season_id, snapshot_date, fetched_at,
+                        rank, player_name, team_abbrev, age, position,
+                        games_played, goals, assists, points, pim, plus_minus,
+                        toi_avg, toi_es, toi_pp, toi_sh,
+                        es_goals, pp_goals, sh_goals, gw_goals, ot_goals,
+                        es_assists, pp_assists, sh_assists, gw_assists, ot_assists,
+                        es_points, pp_points, sh_points, gw_points, ot_points, ppp_pct,
+                        goals_per_60, assists_per_60, points_per_60,
+                        es_goals_per_60, es_assists_per_60, es_points_per_60,
+                        pp_goals_per_60, pp_assists_per_60, pp_points_per_60,
+                        goals_per_game, assists_per_game, points_per_game,
+                        shots_on_goal, shooting_pct,
+                        hits, blocked_shots,
+                        faceoffs_won, faceoffs_lost, faceoff_pct,
+                        nationality
+                    ) VALUES (
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                        $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+                        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
+                        $31, $32, $33, $34, $35, $36, $37, $38, $39, $40,
+                        $41, $42, $43, $44, $45, $46, $47, $48, $49, $50,
+                        $51, $52, $53, $54
+                    )
+                    ON CONFLICT (season_id, snapshot_date, player_name, team_abbrev)
+                    DO UPDATE SET
+                        fetched_at = EXCLUDED.fetched_at,
+                        rank = EXCLUDED.rank,
+                        age = EXCLUDED.age,
+                        games_played = EXCLUDED.games_played,
+                        goals = EXCLUDED.goals,
+                        assists = EXCLUDED.assists,
+                        points = EXCLUDED.points,
+                        pim = EXCLUDED.pim,
+                        plus_minus = EXCLUDED.plus_minus,
+                        toi_avg = EXCLUDED.toi_avg,
+                        toi_es = EXCLUDED.toi_es,
+                        toi_pp = EXCLUDED.toi_pp,
+                        toi_sh = EXCLUDED.toi_sh,
+                        es_goals = EXCLUDED.es_goals,
+                        pp_goals = EXCLUDED.pp_goals,
+                        sh_goals = EXCLUDED.sh_goals,
+                        gw_goals = EXCLUDED.gw_goals,
+                        ot_goals = EXCLUDED.ot_goals,
+                        es_assists = EXCLUDED.es_assists,
+                        pp_assists = EXCLUDED.pp_assists,
+                        sh_assists = EXCLUDED.sh_assists,
+                        gw_assists = EXCLUDED.gw_assists,
+                        ot_assists = EXCLUDED.ot_assists,
+                        es_points = EXCLUDED.es_points,
+                        pp_points = EXCLUDED.pp_points,
+                        sh_points = EXCLUDED.sh_points,
+                        gw_points = EXCLUDED.gw_points,
+                        ot_points = EXCLUDED.ot_points,
+                        ppp_pct = EXCLUDED.ppp_pct,
+                        goals_per_60 = EXCLUDED.goals_per_60,
+                        assists_per_60 = EXCLUDED.assists_per_60,
+                        points_per_60 = EXCLUDED.points_per_60,
+                        es_goals_per_60 = EXCLUDED.es_goals_per_60,
+                        es_assists_per_60 = EXCLUDED.es_assists_per_60,
+                        es_points_per_60 = EXCLUDED.es_points_per_60,
+                        pp_goals_per_60 = EXCLUDED.pp_goals_per_60,
+                        pp_assists_per_60 = EXCLUDED.pp_assists_per_60,
+                        pp_points_per_60 = EXCLUDED.pp_points_per_60,
+                        goals_per_game = EXCLUDED.goals_per_game,
+                        assists_per_game = EXCLUDED.assists_per_game,
+                        points_per_game = EXCLUDED.points_per_game,
+                        shots_on_goal = EXCLUDED.shots_on_goal,
+                        shooting_pct = EXCLUDED.shooting_pct,
+                        hits = EXCLUDED.hits,
+                        blocked_shots = EXCLUDED.blocked_shots,
+                        faceoffs_won = EXCLUDED.faceoffs_won,
+                        faceoffs_lost = EXCLUDED.faceoffs_lost,
+                        faceoff_pct = EXCLUDED.faceoff_pct,
+                        nationality = EXCLUDED.nationality,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    season_id,
+                    snapshot_date,
+                    fetched_at,
+                    player.rank,
+                    player.name,
+                    player.team,
+                    player.age,
+                    player.position,
+                    player.games_played,
+                    player.goals,
+                    player.assists,
+                    player.points,
+                    player.pim,
+                    player.plus_minus,
+                    player.toi_avg,
+                    player.toi_es,
+                    player.toi_pp,
+                    player.toi_sh,
+                    player.es_goals,
+                    player.pp_goals,
+                    player.sh_goals,
+                    player.gw_goals,
+                    player.ot_goals,
+                    player.es_assists,
+                    player.pp_assists,
+                    player.sh_assists,
+                    player.gw_assists,
+                    player.ot_assists,
+                    player.es_points,
+                    player.pp_points,
+                    player.sh_points,
+                    player.gw_points,
+                    player.ot_points,
+                    player.ppp_pct,
+                    player.goals_per_60,
+                    player.assists_per_60,
+                    player.points_per_60,
+                    player.es_goals_per_60,
+                    player.es_assists_per_60,
+                    player.es_points_per_60,
+                    player.pp_goals_per_60,
+                    player.pp_assists_per_60,
+                    player.pp_points_per_60,
+                    player.goals_per_game,
+                    player.assists_per_game,
+                    player.points_per_game,
+                    player.shots_on_goal,
+                    player.shooting_pct,
+                    player.hits,
+                    player.blocked_shots,
+                    player.faceoffs_won,
+                    player.faceoffs_lost,
+                    player.faceoff_pct,
+                    player.nationality,
+                )
+                count += 1
+            except Exception as e:
+                logger.warning(
+                    "Failed to persist player %s: %s",
+                    player.name,
+                    e,
+                )
+
+        logger.info(
+            "Persisted %d QuantHockey player stats for season %d",
+            count,
+            season_id,
+        )
+        return count

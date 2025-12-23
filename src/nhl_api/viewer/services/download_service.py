@@ -41,6 +41,8 @@ SOURCE_NAME_TO_ID = {
     "dailyfaceoff_penalty_kill": 22,
     "dailyfaceoff_injuries": 23,
     "dailyfaceoff_starting_goalies": 24,
+    # QuantHockey sources (IDs assigned in migration 023)
+    "quanthockey_player_stats": 25,
 }
 
 
@@ -243,6 +245,10 @@ class DownloadService:
                 )
             elif source_type == "dailyfaceoff":
                 await self._run_dailyfaceoff_download(
+                    db, batch_id, source_name, season_id, force
+                )
+            elif source_type == "quanthockey":
+                await self._run_quanthockey_download(
                     db, batch_id, source_name, season_id, force
                 )
             elif source_type == "html_report":
@@ -489,6 +495,94 @@ class DownloadService:
                     snapshot_date,
                     active_download,
                 )
+
+        await self._complete_batch(db, batch_id, "completed")
+
+    async def _run_quanthockey_download(
+        self,
+        db: DatabaseService,
+        batch_id: int,
+        source_name: str,
+        season_id: int,
+        force: bool,
+    ) -> None:
+        """Run a download for QuantHockey player statistics.
+
+        QuantHockey data is season-based (not game or team based), so we
+        download all player stats for the entire season in one batch.
+        """
+        from datetime import date
+
+        from nhl_api.downloaders.sources.external.quanthockey import (
+            QuantHockeyConfig,
+            QuantHockeyPlayerStatsDownloader,
+        )
+
+        config = QuantHockeyConfig()
+        active_download = self._active_downloads.get(batch_id)
+        snapshot_date = date.today()
+
+        logger.info(
+            "Starting QuantHockey download: %s for season %d",
+            source_name,
+            season_id,
+        )
+
+        # QuantHockey fetches all players in a single season download
+        # Set items_total to 1 (we're downloading one season's worth of data)
+        if active_download:
+            active_download.items_total = 1
+
+        await db.execute(
+            "UPDATE import_batches SET items_total = 1 WHERE batch_id = $1",
+            batch_id,
+        )
+
+        downloader = QuantHockeyPlayerStatsDownloader(config)
+        async with downloader:
+            try:
+                # Download all player stats for the season
+                players = await downloader.download_player_stats(
+                    season_id,
+                    max_players=None,  # Get all players
+                    max_pages=20,  # Up to 400 players
+                )
+
+                logger.info(
+                    "Downloaded %d players from QuantHockey for season %d",
+                    len(players),
+                    season_id,
+                )
+
+                # Persist to database
+                persisted = await downloader.persist(
+                    db, players, season_id, snapshot_date
+                )
+
+                logger.info(
+                    "Persisted %d QuantHockey player records for season %d",
+                    persisted,
+                    season_id,
+                )
+
+                if active_download:
+                    active_download.items_completed = 1
+                await db.execute(
+                    "UPDATE import_batches SET items_success = 1 WHERE batch_id = $1",
+                    batch_id,
+                )
+
+            except Exception:
+                logger.exception(
+                    "Failed to download QuantHockey stats for season %d", season_id
+                )
+                if active_download:
+                    active_download.items_failed = 1
+                await db.execute(
+                    "UPDATE import_batches SET items_failed = 1 WHERE batch_id = $1",
+                    batch_id,
+                )
+                raise
 
         await self._complete_batch(db, batch_id, "completed")
 
