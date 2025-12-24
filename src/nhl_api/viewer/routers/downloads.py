@@ -46,13 +46,15 @@ SOURCE_TYPE_DISPLAY = {
 
 # Human-friendly display names for individual sources
 SOURCE_DISPLAY_NAMES = {
+    # NHL JSON API sources
     "nhl_schedule": "Schedule",
     "nhl_boxscore": "Boxscores",
-    "nhl_pbp": "Play-by-Play",
+    "nhl_pbp": "Play-by-Play (JSON)",
     "nhl_roster": "Rosters",
     "nhl_standings": "Standings",
     "nhl_player": "Player Profiles",
-    # HTML sources
+    "nhl_player_game_log": "Player Game Logs",
+    # HTML report sources
     "html_gs": "Game Summary (GS)",
     "html_es": "Event Summary (ES)",
     "html_pl": "Play-by-Play (PL)",
@@ -62,13 +64,17 @@ SOURCE_DISPLAY_NAMES = {
     "html_ss": "Shot Summary (SS)",
     "html_th": "Time on Ice - Home (TH)",
     "html_tv": "Time on Ice - Visitor (TV)",
+    # Shift Charts
+    "shift_chart": "Shift Charts",
     # DailyFaceoff sources
     "dailyfaceoff_lines": "Line Combinations",
+    "dailyfaceoff_roster": "Roster Positions",
     "dailyfaceoff_power_play": "Power Play Units",
     "dailyfaceoff_penalty_kill": "Penalty Kill Units",
     "dailyfaceoff_injuries": "Injuries",
     "dailyfaceoff_starting_goalies": "Starting Goalies",
     # QuantHockey sources
+    "quanthockey": "Player Stats (Legacy)",
     "quanthockey_player_stats": "Player Season Stats",
 }
 

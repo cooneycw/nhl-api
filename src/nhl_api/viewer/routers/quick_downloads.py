@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, status
 
 from nhl_api.services.db import DatabaseService
 from nhl_api.viewer.dependencies import get_db
+from nhl_api.viewer.routers.downloads import SOURCE_DISPLAY_NAMES
 from nhl_api.viewer.schemas.quick_downloads import (
     PriorSeasonRequest,
     QuickDownloadResponse,
@@ -79,29 +80,6 @@ EXTERNAL_SOURCES = [
 
 # All game-based sources for season downloads
 ALL_GAME_SOURCES = CORE_NHL_SOURCES + HTML_REPORT_SOURCES + SHIFT_CHART_SOURCES
-
-# Display names for sources
-SOURCE_DISPLAY_NAMES = {
-    "nhl_schedule": "Schedule",
-    "nhl_boxscore": "Boxscores",
-    "nhl_pbp": "Play-by-Play",
-    "html_gs": "Game Summary",
-    "html_es": "Event Summary",
-    "html_pl": "Play-by-Play HTML",
-    "html_fs": "Faceoff Summary",
-    "html_fc": "Faceoff Comparison",
-    "html_ro": "Roster Report",
-    "html_ss": "Shot Summary",
-    "html_th": "Time on Ice (Home)",
-    "html_tv": "Time on Ice (Visitor)",
-    "shift_chart": "Shift Charts",
-    "dailyfaceoff_lines": "Line Combinations",
-    "dailyfaceoff_power_play": "Power Play Units",
-    "dailyfaceoff_penalty_kill": "Penalty Kill Units",
-    "dailyfaceoff_injuries": "Injuries",
-    "dailyfaceoff_starting_goalies": "Starting Goalies",
-    "quanthockey_player_stats": "Player Stats",
-}
 
 
 async def _get_current_season(db: DatabaseService) -> tuple[int, str]:
