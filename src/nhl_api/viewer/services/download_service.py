@@ -1058,3 +1058,74 @@ class DownloadService:
         except Exception as e:
             # Don't fail the batch if view refresh fails
             logger.warning("Failed to refresh materialized views: %s", e)
+
+        # Trigger auto-validation for relevant sources
+        if status == "completed":
+            await self._maybe_trigger_auto_validation(db, batch_id)
+
+    async def _maybe_trigger_auto_validation(
+        self,
+        db: DatabaseService,
+        batch_id: int,
+    ) -> None:
+        """Check if auto-validation should be triggered after batch completion.
+
+        Auto-validation is triggered for game-based sources (boxscore, PBP, shifts)
+        when all required data is present for a game.
+
+        Args:
+            db: Database service
+            batch_id: Completed batch ID
+        """
+        from nhl_api.viewer.services.auto_validation_service import (
+            VALIDATION_AUTO_RUN,
+            get_auto_validation_service,
+        )
+
+        if not VALIDATION_AUTO_RUN:
+            return
+
+        # Get batch info
+        batch = await db.fetchrow(
+            """
+            SELECT source_id, season_id
+            FROM import_batches
+            WHERE batch_id = $1
+            """,
+            batch_id,
+        )
+
+        if not batch:
+            return
+
+        # Only trigger for sources that are part of validation
+        validation_source_ids = {2, 3, 16}  # boxscore, pbp, shift_chart
+        if batch["source_id"] not in validation_source_ids:
+            return
+
+        season_id = batch["season_id"]
+        auto_validation = get_auto_validation_service()
+
+        # Get games that now have complete data
+        games = await auto_validation.get_games_pending_validation(
+            db, season_id, limit=50
+        )
+
+        if not games:
+            logger.debug("No games pending validation for season %d", season_id)
+            return
+
+        logger.info(
+            "Queueing auto-validation for %d games in season %d",
+            len(games),
+            season_id,
+        )
+
+        # Ensure worker is running
+        await auto_validation.start()
+
+        # Queue each game for validation
+        for game_id in games:
+            await auto_validation.queue_validation(
+                db, game_id, season_id, validator_types=["json_cross_source"]
+            )
