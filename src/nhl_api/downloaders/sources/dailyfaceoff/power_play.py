@@ -367,7 +367,6 @@ class PowerPlayDownloader(BaseDailyFaceoffDownloader):
         self,
         db: DatabaseService,
         pp_data: dict[str, Any],
-        team_abbrev: str,
         season_id: int,
         snapshot_date: date,
     ) -> int:
@@ -378,7 +377,6 @@ class PowerPlayDownloader(BaseDailyFaceoffDownloader):
         Args:
             db: Database service instance
             pp_data: Parsed power play dictionary from download_team()
-            team_abbrev: Team abbreviation (e.g., "BOS")
             season_id: NHL season ID (e.g., 20242025)
             snapshot_date: Date of the snapshot
 
@@ -386,6 +384,12 @@ class PowerPlayDownloader(BaseDailyFaceoffDownloader):
             Number of player positions upserted
         """
         count = 0
+        # Extract team_abbrev from data (matches other DailyFaceoff persist signatures)
+        team_abbrev = pp_data.get("team_abbreviation", "")
+        if not team_abbrev:
+            logger.warning("No team_abbreviation in pp_data, skipping persist")
+            return 0
+
         fetched_at = datetime.fromisoformat(
             pp_data.get("fetched_at", datetime.now(UTC).isoformat())
         )

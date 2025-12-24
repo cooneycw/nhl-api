@@ -713,7 +713,6 @@ class PenaltyKillDownloader(BaseDailyFaceoffDownloader):
         self,
         db: DatabaseService,
         pk_data: dict[str, Any],
-        team_abbrev: str,
         season_id: int,
         snapshot_date: date,
     ) -> int:
@@ -724,7 +723,6 @@ class PenaltyKillDownloader(BaseDailyFaceoffDownloader):
         Args:
             db: Database service instance
             pk_data: Parsed penalty kill dictionary from download_team()
-            team_abbrev: Team abbreviation (e.g., "BOS")
             season_id: NHL season ID (e.g., 20242025)
             snapshot_date: Date of the snapshot
 
@@ -732,6 +730,12 @@ class PenaltyKillDownloader(BaseDailyFaceoffDownloader):
             Number of player positions upserted
         """
         count = 0
+        # Extract team_abbrev from data (matches other DailyFaceoff persist signatures)
+        team_abbrev = pk_data.get("team_abbreviation", "")
+        if not team_abbrev:
+            logger.warning("No team_abbreviation in pk_data, skipping persist")
+            return 0
+
         fetched_at = datetime.fromisoformat(
             pk_data.get("fetched_at", datetime.now(UTC).isoformat())
         )
