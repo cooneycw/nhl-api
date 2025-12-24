@@ -99,11 +99,14 @@ function GoalieStartCard({ goalie }: { goalie: StartingGoalieEntry }) {
 }
 
 export function Injuries() {
-  const [statusFilter, setStatusFilter] = useState<string>('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+
+  // Convert 'all' to undefined for API calls
+  const statusParam = statusFilter === 'all' ? undefined : statusFilter
 
   const { data: injuriesData, isLoading: injuriesLoading, error: injuriesError } = useLeagueInjuries(
     undefined,
-    statusFilter || undefined
+    statusParam
   )
   const { data: startersData, isLoading: startersLoading, error: startersError } = useTodaysStarters()
 
@@ -134,7 +137,7 @@ export function Injuries() {
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Statuses</SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="ir">IR</SelectItem>
                 <SelectItem value="out">Out</SelectItem>
                 <SelectItem value="day-to-day">Day-to-Day</SelectItem>

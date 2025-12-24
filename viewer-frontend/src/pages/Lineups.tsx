@@ -101,19 +101,22 @@ function PKPlayerCard({ player }: { player: PenaltyKillPlayerEntry }) {
 
 export function Lineups() {
   const [selectedTeam, setSelectedTeam] = useState<string>('')
-  const [selectedDate, setSelectedDate] = useState<string>('')
+  const [selectedDate, setSelectedDate] = useState<string>('latest')
+
+  // Convert 'latest' to undefined for API calls
+  const dateParam = selectedDate === 'latest' ? undefined : selectedDate
 
   const { data: linesData, isLoading: linesLoading, error: linesError } = useTeamLines(
     selectedTeam,
-    selectedDate || undefined
+    dateParam
   )
   const { data: ppData, isLoading: ppLoading } = useTeamPowerPlay(
     selectedTeam,
-    selectedDate || undefined
+    dateParam
   )
   const { data: pkData, isLoading: pkLoading } = useTeamPenaltyKill(
     selectedTeam,
-    selectedDate || undefined
+    dateParam
   )
   const { data: historyDates } = useLineHistory(selectedTeam)
 
@@ -143,7 +146,7 @@ export function Lineups() {
                 <SelectValue placeholder="Latest" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Latest</SelectItem>
+                <SelectItem value="latest">Latest</SelectItem>
                 {historyDates.map((date) => (
                   <SelectItem key={date} value={date}>
                     {new Date(date).toLocaleDateString()}
