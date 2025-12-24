@@ -37,11 +37,17 @@ def downloader(config: QuantHockeyConfig) -> QuantHockeyPlayerStatsDownloader:
 
 @pytest.fixture
 def sample_html_row() -> str:
-    """Sample HTML table row for a player."""
+    """Sample HTML table row for a player.
+
+    Matches actual QuantHockey HTML format where:
+    - First 3 columns use <th>: rank, nationality flag (img), player name
+    - Remaining columns use <td> for stats
+    """
     return """
     <tr>
-        <td>1</td>
-        <td><a href="/player/8478402">Connor McDavid</a></td>
+        <th>1</th>
+        <th><img alt="CAN" title="Canada" src="flags/Canada.png"></th>
+        <th><a href="/player/8478402">Connor McDavid</a></th>
         <td><a href="/nhl/teams/edm">EDM</a></td>
         <td>28</td>
         <td>C</td>
@@ -90,7 +96,6 @@ def sample_html_row() -> str:
         <td>856</td>
         <td>644</td>
         <td>57.1</td>
-        <td>CAN</td>
     </tr>
     """
 
@@ -103,10 +108,11 @@ def sample_html_page(sample_html_row: str) -> str:
     <html>
     <head><title>NHL Players Stats 2024-25</title></head>
     <body>
-        <table id="stats" class="sortable">
+        <table id="statistics" class="qh-table-green ps_tbl nowrap dt3">
             <thead>
                 <tr>
                     <th>Rk</th>
+                    <th>Nationality</th>
                     <th>Name</th>
                     <th>Team</th>
                     <th>Age</th>
@@ -141,9 +147,9 @@ def sample_html_page_no_next() -> str:
     <!DOCTYPE html>
     <html>
     <body>
-        <table id="stats" class="sortable">
+        <table id="statistics" class="qh-table-green">
             <thead>
-                <tr><th>Rk</th><th>Name</th></tr>
+                <tr><th>Rk</th><th>Nationality</th><th>Name</th></tr>
             </thead>
             <tbody>
             </tbody>
@@ -638,18 +644,18 @@ class TestEdgeCases:
         html = (
             """
         <html><body>
-            <table id="stats">
+            <table id="statistics">
                 <tbody>
                     <tr>
-                        <td>1</td>
-                        <td>Patrice Bergéron</td>
+                        <th>1</th>
+                        <th><img alt="CAN" title="Canada"></th>
+                        <th>Patrice Bergéron</th>
                         <td>BOS</td>
                         <td>38</td>
                         <td>C</td>
                         """
-            + "<td>0</td>" * 46
+            + "<td>0</td>" * 45
             + """
-                        <td></td>
                     </tr>
                 </tbody>
             </table>

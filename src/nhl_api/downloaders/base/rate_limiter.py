@@ -120,7 +120,11 @@ class RateLimiter:
             raise ValueError("requests_per_second must be positive")
 
         self.requests_per_second = requests_per_second
-        self.burst_size = burst_size if burst_size is not None else requests_per_second
+        # Ensure burst_size is at least 1.0 to allow the first request to proceed
+        # With try_consume() requiring tokens >= 1.0, a smaller burst_size would hang
+        self.burst_size = max(
+            1.0, burst_size if burst_size is not None else requests_per_second
+        )
         self.per_domain = per_domain
 
         # Lock to ensure thread-safe bucket access

@@ -167,18 +167,50 @@ class QuantHockeyPlayerStatsDownloader(BaseExternalDownloader):
         Returns:
             QuantHockeyPlayerSeasonStats or None if row is invalid
         """
-        cells = row.find_all("td")
-        if len(cells) < 50:
+        # QuantHockey uses <th> for rank, nationality, name columns and <td> for stats
+        cells = row.find_all(["th", "td"])
+        if len(cells) < 48:  # Minimum columns (may vary slightly)
             # Not a valid player row
             return None
 
         try:
+            # QuantHockey HTML column order:
+            # 0: Rank (th)
+            # 1: Nationality flag (th) - img with alt text
+            # 2: Player name (th) - in link
+            # 3: Team (td)
+            # 4: Age (td)
+            # 5: Position (td)
+            # 6+: Stats...
+            #
+            # Model expects: rank, name, team, age, position, ... nationality at end
+
+            # Extract nationality from the flag image alt text
+            nationality = ""
+            if len(cells) > 1:
+                img = cells[1].find("img")
+                if img:
+                    alt = img.get("alt") or img.get("title") or ""
+                    nationality = str(alt) if alt else ""
+
             # Extract text from each cell
-            row_data: list[str] = []
+            raw_data: list[str] = []
             for cell in cells:
                 # Get text, handling links and special content
                 text = cell.get_text(strip=True)
-                row_data.append(text)
+                raw_data.append(text)
+
+            # Remap columns to match model's expected order:
+            # Model: rank(0), name(1), team(2), age(3), pos(4), GP(5), ...
+            # HTML:  rank(0), flag(1), name(2), team(3), age(4), pos(5), GP(6), ...
+            row_data: list[str] = [
+                raw_data[0],  # rank
+                raw_data[2],  # name (skip flag at index 1)
+            ]
+            # Add remaining columns from index 3 onwards
+            row_data.extend(raw_data[3:])
+            # Add nationality at the end (index 50)
+            row_data.append(nationality)
 
             # Create stats from row data
             return QuantHockeyPlayerSeasonStats.from_row_data(
@@ -208,8 +240,8 @@ class QuantHockeyPlayerStatsDownloader(BaseExternalDownloader):
         players: list[QuantHockeyPlayerSeasonStats] = []
 
         # Find the main statistics table
-        # QuantHockey uses tables with class containing "stats" or id "statsTable"
-        stats_table = soup.find("table", {"id": "stats"})
+        # QuantHockey uses table with id="statistics"
+        stats_table = soup.find("table", {"id": "statistics"})
         if not stats_table:
             stats_table = soup.find("table", class_=re.compile(r"stats|sortable"))
         if not stats_table:
@@ -237,8 +269,10 @@ class QuantHockeyPlayerStatsDownloader(BaseExternalDownloader):
         # Parse each row
         for row in rows:
             if isinstance(row, Tag):
-                # Skip header rows
-                if row.find("th"):
+                # Skip header rows (ones with <th> in the first position only if no <td>)
+                # QuantHockey uses <th> for first 3 cols (rank, flag, name) in data rows too
+                tds = row.find_all("td")
+                if not tds:  # Pure header row has no <td> elements
                     continue
 
                 player = self._extract_player_row(row, season_id)
@@ -306,7 +340,12 @@ class QuantHockeyPlayerStatsDownloader(BaseExternalDownloader):
         Returns:
             Dictionary with parsed player data
         """
-        html_content = response.text()
+        # QuantHockey pages may contain non-UTF-8 characters (player names with accents)
+        # Try UTF-8 first, fall back to latin-1
+        try:
+            html_content = response.text()
+        except UnicodeDecodeError:
+            html_content = response.text("latin-1")
         season_id = context.get("season_id", 0)
 
         players = self._parse_stats_table(html_content, season_id)
