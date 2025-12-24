@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { SeasonProvider } from '@/contexts/SeasonContext'
 import { Layout } from '@/components/Layout'
 import { Dashboard } from '@/pages/Dashboard'
 import { Downloads } from '@/pages/Downloads'
@@ -18,24 +19,26 @@ import { Help } from '@/pages/Help'
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="downloads" element={<Downloads />} />
-          <Route path="coverage" element={<Coverage />} />
-          <Route path="players" element={<Players />} />
-          <Route path="players/:playerId" element={<PlayerDetail />} />
-          <Route path="games" element={<Games />} />
-          <Route path="games/:gameId" element={<GameDetail />} />
-          <Route path="teams" element={<Teams />} />
-          <Route path="teams/:teamId" element={<TeamDetail />} />
-          <Route path="lineups" element={<Lineups />} />
-          <Route path="injuries" element={<Injuries />} />
-          <Route path="validation" element={<Validation />} />
-          <Route path="validation/game/:gameId" element={<GameReconciliation />} />
-          <Route path="help" element={<Help />} />
-        </Route>
-      </Routes>
+      <SeasonProvider>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="downloads" element={<Downloads />} />
+            <Route path="coverage" element={<Coverage />} />
+            <Route path="players" element={<Players />} />
+            <Route path="players/:playerId" element={<PlayerDetail />} />
+            <Route path="games" element={<Games />} />
+            <Route path="games/:gameId" element={<GameDetail />} />
+            <Route path="teams" element={<Teams />} />
+            <Route path="teams/:teamId" element={<TeamDetail />} />
+            <Route path="lineups" element={<Lineups />} />
+            <Route path="injuries" element={<Injuries />} />
+            <Route path="validation" element={<Validation />} />
+            <Route path="validation/game/:gameId" element={<GameReconciliation />} />
+            <Route path="help" element={<Help />} />
+          </Route>
+        </Routes>
+      </SeasonProvider>
     </BrowserRouter>
   )
 }
