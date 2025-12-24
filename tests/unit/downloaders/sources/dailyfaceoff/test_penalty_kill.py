@@ -38,74 +38,80 @@ def downloader(config: DailyFaceoffConfig) -> PenaltyKillDownloader:
 
 @pytest.fixture
 def sample_next_data() -> dict[str, Any]:
-    """Sample __NEXT_DATA__ structure with PK data."""
+    """Sample __NEXT_DATA__ structure with PK data.
+
+    Matches real DailyFaceoff structure: props.pageProps.combinations.players[]
+    with each player having a groupIdentifier and positionIdentifier.
+    """
     return {
         "props": {
             "pageProps": {
-                "formations": [
-                    {
-                        "groupIdentifier": "pk1",
-                        "groupName": "1st Penalty Kill Unit",
-                        "players": [
-                            {
-                                "name": "Scott Laughton",
-                                "jerseyNumber": 21,
-                                "position": "C",
-                                "playerId": "12345",
-                            },
-                            {
-                                "name": "Steven Lorentz",
-                                "jerseyNumber": 17,
-                                "position": "F",
-                                "playerId": "12346",
-                            },
-                            {
-                                "name": "Jake McCabe",
-                                "jerseyNumber": 22,
-                                "position": "D",
-                                "playerId": "12347",
-                            },
-                            {
-                                "name": "Henry Thrun",
-                                "jerseyNumber": 3,
-                                "position": "D",
-                                "playerId": "12348",
-                            },
-                        ],
-                    },
-                    {
-                        "groupIdentifier": "pk2",
-                        "groupName": "2nd Penalty Kill Unit",
-                        "players": [
-                            {
-                                "name": "Nicolas Roy",
-                                "jerseyNumber": 10,
-                                "position": "C",
-                                "playerId": "12349",
-                            },
-                            {
-                                "name": "Matthew Knies",
-                                "jerseyNumber": 23,
-                                "position": "LW",
-                                "playerId": "12350",
-                            },
-                            {
-                                "name": "Simon Benoit",
-                                "jerseyNumber": 6,
-                                "position": "D",
-                                "playerId": "12351",
-                            },
-                            {
-                                "name": "Troy Stecher",
-                                "jerseyNumber": 51,
-                                "position": "D",
-                                "playerId": "12352",
-                            },
-                        ],
-                    },
-                ]
-            }
-        }
+                "combinations": {
+                    "players": [
+                        # PK1 forwards (sk1, sk2)
+                        {
+                            "name": "Scott Laughton",
+                            "jerseyNumber": 21,
+                            "positionIdentifier": "sk1",
+                            "playerId": "12345",
+                            "groupIdentifier": "pk1",
+                        },
+                        {
+                            "name": "Steven Lorentz",
+                            "jerseyNumber": 17,
+                            "positionIdentifier": "sk2",
+                            "playerId": "12346",
+                            "groupIdentifier": "pk1",
+                        },
+                        # PK1 defensemen (sk3, sk4)
+                        {
+                            "name": "Jake McCabe",
+                            "jerseyNumber": 22,
+                            "positionIdentifier": "sk3",
+                            "playerId": "12347",
+                            "groupIdentifier": "pk1",
+                        },
+                        {
+                            "name": "Henry Thrun",
+                            "jerseyNumber": 3,
+                            "positionIdentifier": "sk4",
+                            "playerId": "12348",
+                            "groupIdentifier": "pk1",
+                        },
+                        # PK2 forwards (sk1, sk2)
+                        {
+                            "name": "Nicolas Roy",
+                            "jerseyNumber": 10,
+                            "positionIdentifier": "sk1",
+                            "playerId": "12349",
+                            "groupIdentifier": "pk2",
+                        },
+                        {
+                            "name": "Matthew Knies",
+                            "jerseyNumber": 23,
+                            "positionIdentifier": "sk2",
+                            "playerId": "12350",
+                            "groupIdentifier": "pk2",
+                        },
+                        # PK2 defensemen (sk3, sk4)
+                        {
+                            "name": "Simon Benoit",
+                            "jerseyNumber": 6,
+                            "positionIdentifier": "sk3",
+                            "playerId": "12351",
+                            "groupIdentifier": "pk2",
+                        },
+                        {
+                            "name": "Troy Stecher",
+                            "jerseyNumber": 51,
+                            "positionIdentifier": "sk4",
+                            "playerId": "12352",
+                            "groupIdentifier": "pk2",
+                        },
+                    ],
+                },
+            },
+        },
     }
 
 
@@ -309,7 +315,7 @@ class TestParseFromJson:
         assert len(pk1_players) == 4
         assert pk1_players[0].name == "Scott Laughton"
         assert pk1_players[0].jersey_number == 21
-        assert pk1_players[0].position == "C"
+        assert pk1_players[0].position == "sk1"  # DailyFaceoff uses sk1-sk4 identifiers
 
         pk2_players = downloader._parse_from_json(soup, "pk2")
         assert len(pk2_players) == 4

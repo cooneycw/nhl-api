@@ -236,35 +236,66 @@ class PenaltyKillDownloader(BaseDailyFaceoffDownloader):
     ) -> list[PKPlayer]:
         """Extract PK players from Next.js data structure.
 
+        The path is: props.pageProps.combinations.players
+        Filter by groupIdentifier == group_id (e.g., "pk1" or "pk2")
+
         Args:
             data: Parsed __NEXT_DATA__ JSON
-            group_id: Group identifier
+            group_id: Group identifier (e.g., "pk1")
 
         Returns:
             List of PKPlayer objects
         """
         players: list[PKPlayer] = []
 
-        # Navigate the nested structure - this varies by page
         try:
-            props = data.get("props", {})
-            page_props = props.get("pageProps", {})
+            # Navigate to players array - same structure as PowerPlayDownloader
+            all_players = (
+                data.get("props", {})
+                .get("pageProps", {})
+                .get("combinations", {})
+                .get("players", [])
+            )
 
-            # Look for lineup or formations data
-            for key in ["lineup", "formations", "penaltyKill", "specialTeams"]:
-                if key in page_props:
-                    section = page_props[key]
-                    players = self._search_for_group(section, group_id)
-                    if players:
-                        return players
+            # Filter for this PK unit
+            unit_players = [
+                p for p in all_players if p.get("groupIdentifier") == group_id
+            ]
 
-            # Deep search for the group
-            players = self._deep_search_group(page_props, group_id)
+            for player_data in unit_players:
+                player = self._parse_player_from_json(player_data)
+                if player:
+                    players.append(player)
 
         except (KeyError, TypeError, AttributeError) as e:
             logger.debug("Error extracting from Next.js data: %s", e)
 
         return players
+
+    def _parse_player_from_json(self, player_data: dict[str, Any]) -> PKPlayer | None:
+        """Parse a PKPlayer from JSON player data.
+
+        Args:
+            player_data: Player dictionary from combinations.players
+
+        Returns:
+            PKPlayer or None if required fields missing
+        """
+        name = player_data.get("name") or player_data.get("fullName", "")
+        if not name:
+            return None
+
+        # Position determines forward vs defenseman
+        position = player_data.get("positionIdentifier", "") or player_data.get(
+            "position", ""
+        )
+
+        return PKPlayer(
+            name=name,
+            jersey_number=player_data.get("jerseyNumber"),
+            position=position,
+            player_id=player_data.get("playerId"),
+        )
 
     def _search_for_group(self, data: Any, group_id: str) -> list[PKPlayer]:
         """Search for a specific group in data structure.
@@ -635,6 +666,10 @@ class PenaltyKillDownloader(BaseDailyFaceoffDownloader):
     def _is_forward(self, player: PKPlayer) -> bool:
         """Check if player is a forward.
 
+        In DailyFaceoff's JSON structure, PK units use positionIdentifier:
+        - sk1, sk2 = Forwards (first 2 skaters)
+        - sk3, sk4 = Defensemen (last 2 skaters)
+
         Args:
             player: PKPlayer to check
 
@@ -642,13 +677,22 @@ class PenaltyKillDownloader(BaseDailyFaceoffDownloader):
             True if player appears to be a forward
         """
         if player.position:
+            pos = player.position.lower()
+            # Check for JSON format "sk1", "sk2" (forwards in PK)
+            if pos in ("sk1", "sk2"):
+                return True
+            # Check for traditional position codes
             pos_upper = player.position.upper()
             return pos_upper in ("F", "LW", "C", "RW", "CENTER", "FORWARD")
-        # Default: if we don't know, assume first 2 are forwards
+        # Default: if we don't know, assume forward
         return True
 
     def _is_defenseman(self, player: PKPlayer) -> bool:
         """Check if player is a defenseman.
+
+        In DailyFaceoff's JSON structure, PK units use positionIdentifier:
+        - sk1, sk2 = Forwards (first 2 skaters)
+        - sk3, sk4 = Defensemen (last 2 skaters)
 
         Args:
             player: PKPlayer to check
@@ -657,6 +701,11 @@ class PenaltyKillDownloader(BaseDailyFaceoffDownloader):
             True if player appears to be a defenseman
         """
         if player.position:
+            pos = player.position.lower()
+            # Check for JSON format "sk3", "sk4" (defensemen in PK)
+            if pos in ("sk3", "sk4"):
+                return True
+            # Check for traditional position codes
             pos_upper = player.position.upper()
             return pos_upper in ("D", "LD", "RD", "DEFENSE", "DEFENSEMAN")
         return False
@@ -773,7 +822,7 @@ class PenaltyKillDownloader(BaseDailyFaceoffDownloader):
                     fetched_at,
                     unit_num,
                     player.get("name"),
-                    player.get("player_id"),
+                    str(player.get("player_id")) if player.get("player_id") else None,
                     player.get("jersey_number"),
                     "forward",
                 )
@@ -805,7 +854,7 @@ class PenaltyKillDownloader(BaseDailyFaceoffDownloader):
                     fetched_at,
                     unit_num,
                     player.get("name"),
-                    player.get("player_id"),
+                    str(player.get("player_id")) if player.get("player_id") else None,
                     player.get("jersey_number"),
                     "defense",
                 )

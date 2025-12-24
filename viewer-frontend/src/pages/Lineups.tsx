@@ -7,42 +7,49 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useTeamLines, useTeamPowerPlay, useTeamPenaltyKill, useLineHistory } from '@/hooks/useDailyFaceoff'
 import type { PlayerLineupEntry, PowerPlayPlayerEntry, PenaltyKillPlayerEntry } from '@/lib/api'
 
-// NHL team abbreviations for selector
+// NHL team abbreviations for selector with DailyFaceoff slugs
 const NHL_TEAMS = [
-  { abbrev: 'ANA', name: 'Anaheim Ducks' },
-  { abbrev: 'ARI', name: 'Arizona Coyotes' },
-  { abbrev: 'BOS', name: 'Boston Bruins' },
-  { abbrev: 'BUF', name: 'Buffalo Sabres' },
-  { abbrev: 'CGY', name: 'Calgary Flames' },
-  { abbrev: 'CAR', name: 'Carolina Hurricanes' },
-  { abbrev: 'CHI', name: 'Chicago Blackhawks' },
-  { abbrev: 'COL', name: 'Colorado Avalanche' },
-  { abbrev: 'CBJ', name: 'Columbus Blue Jackets' },
-  { abbrev: 'DAL', name: 'Dallas Stars' },
-  { abbrev: 'DET', name: 'Detroit Red Wings' },
-  { abbrev: 'EDM', name: 'Edmonton Oilers' },
-  { abbrev: 'FLA', name: 'Florida Panthers' },
-  { abbrev: 'LAK', name: 'Los Angeles Kings' },
-  { abbrev: 'MIN', name: 'Minnesota Wild' },
-  { abbrev: 'MTL', name: 'Montreal Canadiens' },
-  { abbrev: 'NSH', name: 'Nashville Predators' },
-  { abbrev: 'NJD', name: 'New Jersey Devils' },
-  { abbrev: 'NYI', name: 'New York Islanders' },
-  { abbrev: 'NYR', name: 'New York Rangers' },
-  { abbrev: 'OTT', name: 'Ottawa Senators' },
-  { abbrev: 'PHI', name: 'Philadelphia Flyers' },
-  { abbrev: 'PIT', name: 'Pittsburgh Penguins' },
-  { abbrev: 'SJS', name: 'San Jose Sharks' },
-  { abbrev: 'SEA', name: 'Seattle Kraken' },
-  { abbrev: 'STL', name: 'St. Louis Blues' },
-  { abbrev: 'TBL', name: 'Tampa Bay Lightning' },
-  { abbrev: 'TOR', name: 'Toronto Maple Leafs' },
-  { abbrev: 'UTA', name: 'Utah Hockey Club' },
-  { abbrev: 'VAN', name: 'Vancouver Canucks' },
-  { abbrev: 'VGK', name: 'Vegas Golden Knights' },
-  { abbrev: 'WSH', name: 'Washington Capitals' },
-  { abbrev: 'WPG', name: 'Winnipeg Jets' },
+  { abbrev: 'ANA', name: 'Anaheim Ducks', slug: 'anaheim-ducks' },
+  { abbrev: 'ARI', name: 'Arizona Coyotes', slug: 'arizona-coyotes' },
+  { abbrev: 'BOS', name: 'Boston Bruins', slug: 'boston-bruins' },
+  { abbrev: 'BUF', name: 'Buffalo Sabres', slug: 'buffalo-sabres' },
+  { abbrev: 'CGY', name: 'Calgary Flames', slug: 'calgary-flames' },
+  { abbrev: 'CAR', name: 'Carolina Hurricanes', slug: 'carolina-hurricanes' },
+  { abbrev: 'CHI', name: 'Chicago Blackhawks', slug: 'chicago-blackhawks' },
+  { abbrev: 'COL', name: 'Colorado Avalanche', slug: 'colorado-avalanche' },
+  { abbrev: 'CBJ', name: 'Columbus Blue Jackets', slug: 'columbus-blue-jackets' },
+  { abbrev: 'DAL', name: 'Dallas Stars', slug: 'dallas-stars' },
+  { abbrev: 'DET', name: 'Detroit Red Wings', slug: 'detroit-red-wings' },
+  { abbrev: 'EDM', name: 'Edmonton Oilers', slug: 'edmonton-oilers' },
+  { abbrev: 'FLA', name: 'Florida Panthers', slug: 'florida-panthers' },
+  { abbrev: 'LAK', name: 'Los Angeles Kings', slug: 'los-angeles-kings' },
+  { abbrev: 'MIN', name: 'Minnesota Wild', slug: 'minnesota-wild' },
+  { abbrev: 'MTL', name: 'Montreal Canadiens', slug: 'montreal-canadiens' },
+  { abbrev: 'NSH', name: 'Nashville Predators', slug: 'nashville-predators' },
+  { abbrev: 'NJD', name: 'New Jersey Devils', slug: 'new-jersey-devils' },
+  { abbrev: 'NYI', name: 'New York Islanders', slug: 'new-york-islanders' },
+  { abbrev: 'NYR', name: 'New York Rangers', slug: 'new-york-rangers' },
+  { abbrev: 'OTT', name: 'Ottawa Senators', slug: 'ottawa-senators' },
+  { abbrev: 'PHI', name: 'Philadelphia Flyers', slug: 'philadelphia-flyers' },
+  { abbrev: 'PIT', name: 'Pittsburgh Penguins', slug: 'pittsburgh-penguins' },
+  { abbrev: 'SJS', name: 'San Jose Sharks', slug: 'san-jose-sharks' },
+  { abbrev: 'SEA', name: 'Seattle Kraken', slug: 'seattle-kraken' },
+  { abbrev: 'STL', name: 'St. Louis Blues', slug: 'st-louis-blues' },
+  { abbrev: 'TBL', name: 'Tampa Bay Lightning', slug: 'tampa-bay-lightning' },
+  { abbrev: 'TOR', name: 'Toronto Maple Leafs', slug: 'toronto-maple-leafs' },
+  { abbrev: 'UTA', name: 'Utah Hockey Club', slug: 'utah-hockey-club' },
+  { abbrev: 'VAN', name: 'Vancouver Canucks', slug: 'vancouver-canucks' },
+  { abbrev: 'VGK', name: 'Vegas Golden Knights', slug: 'vegas-golden-knights' },
+  { abbrev: 'WSH', name: 'Washington Capitals', slug: 'washington-capitals' },
+  { abbrev: 'WPG', name: 'Winnipeg Jets', slug: 'winnipeg-jets' },
 ]
+
+// Get DailyFaceoff URL for a team
+function getDailyFaceoffUrl(abbrev: string): string {
+  const team = NHL_TEAMS.find(t => t.abbrev === abbrev)
+  if (!team) return ''
+  return `https://www.dailyfaceoff.com/teams/${team.slug}/line-combinations`
+}
 
 function PlayerCard({ player, label }: { player: PlayerLineupEntry | null; label: string }) {
   if (!player) {
@@ -202,8 +209,17 @@ export function Lineups() {
           </TabsList>
 
           <TabsContent value="lines" className="space-y-4">
-            <div className="text-sm text-muted-foreground">
-              Data from {new Date(linesData.snapshot_date).toLocaleDateString()}
+            <div className="text-sm text-muted-foreground flex items-center gap-2">
+              <span>Data from {new Date(linesData.snapshot_date).toLocaleDateString()}</span>
+              <span>·</span>
+              <a
+                href={getDailyFaceoffUrl(selectedTeam)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                View on DailyFaceoff
+              </a>
             </div>
 
             {/* Forward Lines */}
@@ -263,8 +279,17 @@ export function Lineups() {
 
           <TabsContent value="powerplay" className="space-y-4">
             {ppData ? (
-              <div className="text-sm text-muted-foreground">
-                Data from {new Date(ppData.snapshot_date).toLocaleDateString()}
+              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                <span>Data from {new Date(ppData.snapshot_date).toLocaleDateString()}</span>
+                <span>·</span>
+                <a
+                  href={getDailyFaceoffUrl(selectedTeam)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  View on DailyFaceoff
+                </a>
               </div>
             ) : null}
 
@@ -309,8 +334,17 @@ export function Lineups() {
 
           <TabsContent value="penaltykill" className="space-y-4">
             {pkData ? (
-              <div className="text-sm text-muted-foreground">
-                Data from {new Date(pkData.snapshot_date).toLocaleDateString()}
+              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                <span>Data from {new Date(pkData.snapshot_date).toLocaleDateString()}</span>
+                <span>·</span>
+                <a
+                  href={getDailyFaceoffUrl(selectedTeam)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  View on DailyFaceoff
+                </a>
               </div>
             ) : null}
 
