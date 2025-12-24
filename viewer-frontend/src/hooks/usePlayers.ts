@@ -125,7 +125,7 @@ export function usePlayers(filters: PlayerFilters = {}) {
 
   return useQuery({
     queryKey: ['players', filters],
-    queryFn: () => api.get<PlayerListResponse>('/entities/players', params),
+    queryFn: () => api.get<PlayerListResponse>('/players', params),
     staleTime: 60 * 1000,
   })
 }
@@ -133,7 +133,7 @@ export function usePlayers(filters: PlayerFilters = {}) {
 export function usePlayerDetail(playerId: number | null) {
   return useQuery({
     queryKey: ['players', playerId],
-    queryFn: () => api.get<PlayerDetail>(`/entities/players/${playerId}`),
+    queryFn: () => api.get<PlayerDetail>(`/players/${playerId}`),
     enabled: playerId !== null,
     staleTime: 5 * 60 * 1000,
   })
@@ -148,7 +148,7 @@ export function usePlayerGames(playerId: number | null, filters: PlayerGameFilte
 
   return useQuery({
     queryKey: ['players', playerId, 'games', filters],
-    queryFn: () => api.get<PlayerGameLogResponse>(`/entities/players/${playerId}/games`, params),
+    queryFn: () => api.get<PlayerGameLogResponse>(`/players/${playerId}/games`, params),
     enabled: playerId !== null,
     staleTime: 5 * 60 * 1000,
   })

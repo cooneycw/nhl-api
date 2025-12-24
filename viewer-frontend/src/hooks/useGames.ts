@@ -172,7 +172,7 @@ export function useGames(filters: GameFilters = {}) {
 
   return useQuery({
     queryKey: ['games', filters],
-    queryFn: () => api.get<GameListResponse>('/entities/games', params),
+    queryFn: () => api.get<GameListResponse>('/games', params),
     staleTime: 60 * 1000, // 1 minute
   })
 }
@@ -180,7 +180,7 @@ export function useGames(filters: GameFilters = {}) {
 export function useGameDetail(gameId: number | null) {
   return useQuery({
     queryKey: ['games', gameId],
-    queryFn: () => api.get<GameDetail>(`/entities/games/${gameId}`),
+    queryFn: () => api.get<GameDetail>(`/games/${gameId}`),
     enabled: gameId !== null,
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
@@ -194,7 +194,7 @@ export function useGameEvents(gameId: number | null, filters: EventFilters = {})
 
   return useQuery({
     queryKey: ['games', gameId, 'events', filters],
-    queryFn: () => api.get<GameEventsResponse>(`/entities/games/${gameId}/events`, params),
+    queryFn: () => api.get<GameEventsResponse>(`/games/${gameId}/events`, params),
     enabled: gameId !== null,
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
@@ -203,7 +203,7 @@ export function useGameEvents(gameId: number | null, filters: EventFilters = {})
 export function useGameStats(gameId: number | null) {
   return useQuery({
     queryKey: ['games', gameId, 'stats'],
-    queryFn: () => api.get<GamePlayerStats>(`/entities/games/${gameId}/stats`),
+    queryFn: () => api.get<GamePlayerStats>(`/games/${gameId}/stats`),
     enabled: gameId !== null,
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
@@ -241,7 +241,7 @@ export interface GameShiftsResponse {
 export function useGameShifts(gameId: number | null) {
   return useQuery({
     queryKey: ['games', gameId, 'shifts'],
-    queryFn: () => api.get<GameShiftsResponse>(`/entities/games/${gameId}/shifts`),
+    queryFn: () => api.get<GameShiftsResponse>(`/games/${gameId}/shifts`),
     enabled: gameId !== null,
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
