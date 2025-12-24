@@ -2,9 +2,14 @@ import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTeams } from '@/hooks/useTeams'
+import { useSeason } from '@/contexts/SeasonContext'
 
 export function Teams() {
-  const { data, isLoading, error } = useTeams({ active_only: true })
+  const { selectedSeason } = useSeason()
+  const { data, isLoading, error } = useTeams({
+    active_only: true,
+    season_id: selectedSeason?.season_id
+  })
 
   if (isLoading) {
     return (

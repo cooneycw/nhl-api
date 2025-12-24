@@ -185,6 +185,9 @@ async def get_player(
 async def list_teams(
     db: DbDep,
     active_only: Annotated[bool, Query(description="Only show active teams")] = True,
+    season_id: Annotated[
+        int | None, Query(description="Season ID (e.g., 20242025)")
+    ] = None,
 ) -> TeamListResponse:
     """Get all teams grouped by division and conference."""
     where_clause = "t.active = TRUE" if active_only else "TRUE"

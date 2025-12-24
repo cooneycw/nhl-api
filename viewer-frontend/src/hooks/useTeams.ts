@@ -73,6 +73,7 @@ interface TeamRecentGamesResponse {
 
 export interface TeamFilters {
   active_only?: boolean
+  season_id?: number
 }
 
 export interface TeamGameFilters {
@@ -87,18 +88,20 @@ export function useTeams(filters: TeamFilters = {}) {
   const params: Record<string, string> = {}
 
   if (filters.active_only !== undefined) params.active_only = String(filters.active_only)
+  if (filters.season_id !== undefined) params.season_id = String(filters.season_id)
 
   return useQuery({
     queryKey: ['teams', filters],
-    queryFn: () => api.get<TeamListResponse>('/entities/teams', params),
+    queryFn: () => api.get<TeamListResponse>('/teams', params),
     staleTime: 5 * 60 * 1000,
+    enabled: filters.season_id !== undefined, // Wait for season to be selected
   })
 }
 
 export function useTeamDetail(teamId: number | null) {
   return useQuery({
     queryKey: ['teams', teamId],
-    queryFn: () => api.get<TeamWithRoster>(`/entities/teams/${teamId}`),
+    queryFn: () => api.get<TeamWithRoster>(`/teams/${teamId}`),
     enabled: teamId !== null,
     staleTime: 5 * 60 * 1000,
   })
@@ -113,7 +116,7 @@ export function useTeamGames(teamId: number | null, filters: TeamGameFilters = {
 
   return useQuery({
     queryKey: ['teams', teamId, 'games', filters],
-    queryFn: () => api.get<TeamRecentGamesResponse>(`/entities/teams/${teamId}/games`, params),
+    queryFn: () => api.get<TeamRecentGamesResponse>(`/teams/${teamId}/games`, params),
     enabled: teamId !== null,
     staleTime: 5 * 60 * 1000,
   })
