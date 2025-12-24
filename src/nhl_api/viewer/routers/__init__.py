@@ -8,6 +8,7 @@ from nhl_api.viewer.routers import (
     health,
     monitoring,
     quanthockey,
+    quick_downloads,
     reconciliation,
     validation,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "health",
     "monitoring",
     "quanthockey",
+    "quick_downloads",
     "reconciliation",
     "validation",
 ]
