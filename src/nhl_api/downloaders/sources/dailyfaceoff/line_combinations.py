@@ -15,11 +15,12 @@ Example usage:
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from bs4 import BeautifulSoup, Tag
 
@@ -155,7 +156,10 @@ class LineCombinationsDownloader(BaseDailyFaceoffDownloader):
         return "line-combinations"
 
     async def _parse_page(self, soup: BeautifulSoup, team_id: int) -> dict[str, Any]:
-        """Parse line combinations page.
+        """Parse line combinations page from __NEXT_DATA__ JSON.
+
+        DailyFaceoff embeds lineup data as JSON in a __NEXT_DATA__ script tag.
+        This method extracts that JSON and parses the line combinations.
 
         Args:
             soup: Parsed BeautifulSoup document
@@ -166,14 +170,34 @@ class LineCombinationsDownloader(BaseDailyFaceoffDownloader):
         """
         abbreviation = self._get_team_abbreviation(team_id)
 
-        # Parse forward lines
-        forward_lines = self._parse_forward_lines(soup)
+        # Extract __NEXT_DATA__ script content
+        next_data = self._extract_next_data(soup)
+        if next_data is None:
+            logger.warning(
+                "%s: No __NEXT_DATA__ found for team %s",
+                self.source_name,
+                abbreviation,
+            )
+            return self._empty_result(team_id, abbreviation)
 
-        # Parse defensive pairs
-        defensive_pairs = self._parse_defensive_pairs(soup)
+        # Navigate to players array
+        players_data = self._get_players_from_next_data(next_data)
+        if not players_data:
+            logger.warning(
+                "%s: No players data found for team %s",
+                self.source_name,
+                abbreviation,
+            )
+            return self._empty_result(team_id, abbreviation)
 
-        # Parse goalies
-        goalies = self._parse_goalies(soup)
+        # Parse forward lines (f1, f2, f3, f4)
+        forward_lines = self._parse_forward_lines_from_json(players_data)
+
+        # Parse defensive pairs (d1, d2, d3)
+        defensive_pairs = self._parse_defensive_pairs_from_json(players_data)
+
+        # Parse goalies (g1, g2)
+        goalies = self._parse_goalies_from_json(players_data)
 
         lineup = TeamLineup(
             team_id=team_id,
@@ -184,6 +208,219 @@ class LineCombinationsDownloader(BaseDailyFaceoffDownloader):
         )
 
         return self._to_dict(lineup)
+
+    def _extract_next_data(self, soup: BeautifulSoup) -> dict[str, Any] | None:
+        """Extract JSON from __NEXT_DATA__ script tag.
+
+        Args:
+            soup: Parsed BeautifulSoup document
+
+        Returns:
+            Parsed JSON data or None if not found
+        """
+        script_tag = soup.find("script", {"id": "__NEXT_DATA__"})
+        if not script_tag or not script_tag.string:
+            return None
+
+        try:
+            return cast(dict[str, Any], json.loads(script_tag.string))
+        except json.JSONDecodeError as e:
+            logger.warning("Failed to parse __NEXT_DATA__ JSON: %s", e)
+            return None
+
+    def _get_players_from_next_data(
+        self, next_data: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Navigate to players array in NEXT_DATA structure.
+
+        The path is: props.pageProps.combinations.players
+
+        Args:
+            next_data: Parsed __NEXT_DATA__ JSON
+
+        Returns:
+            List of player dictionaries or empty list
+        """
+        try:
+            players = (
+                next_data.get("props", {})
+                .get("pageProps", {})
+                .get("combinations", {})
+                .get("players", [])
+            )
+            return cast(list[dict[str, Any]], players)
+        except (AttributeError, TypeError):
+            return []
+
+    def _empty_result(self, team_id: int, abbreviation: str) -> dict[str, Any]:
+        """Return an empty result when parsing fails."""
+        lineup = TeamLineup(
+            team_id=team_id,
+            team_abbreviation=abbreviation,
+            forward_lines=[],
+            defensive_pairs=[],
+            goalies=GoalieDepth(starter=None, backup=None),
+        )
+        return self._to_dict(lineup)
+
+    def _player_from_json(self, player_data: dict[str, Any]) -> PlayerInfo:
+        """Convert JSON player data to PlayerInfo.
+
+        Args:
+            player_data: Player dict from __NEXT_DATA__
+
+        Returns:
+            PlayerInfo instance
+        """
+        return PlayerInfo(
+            name=player_data.get("name", ""),
+            jersey_number=player_data.get("jerseyNumber"),
+            injury_status=player_data.get("injuryStatus"),
+            player_id=str(player_data.get("playerId", ""))
+            if player_data.get("playerId")
+            else None,
+        )
+
+    def _parse_forward_lines_from_json(
+        self, players_data: list[dict[str, Any]]
+    ) -> list[ForwardLine]:
+        """Parse forward lines from JSON players data.
+
+        Args:
+            players_data: List of player dicts from __NEXT_DATA__
+
+        Returns:
+            List of 4 forward lines
+        """
+        lines: list[ForwardLine] = []
+
+        for line_num in range(1, 5):
+            group_id = f"f{line_num}"
+
+            # Filter players for this line
+            line_players = [
+                p for p in players_data if p.get("groupIdentifier") == group_id
+            ]
+
+            lw = next(
+                (
+                    self._player_from_json(p)
+                    for p in line_players
+                    if p.get("positionIdentifier") == "lw"
+                ),
+                None,
+            )
+            c = next(
+                (
+                    self._player_from_json(p)
+                    for p in line_players
+                    if p.get("positionIdentifier") == "c"
+                ),
+                None,
+            )
+            rw = next(
+                (
+                    self._player_from_json(p)
+                    for p in line_players
+                    if p.get("positionIdentifier") == "rw"
+                ),
+                None,
+            )
+
+            if lw or c or rw:
+                lines.append(
+                    ForwardLine(
+                        line_number=line_num,
+                        left_wing=lw or PlayerInfo(name=""),
+                        center=c or PlayerInfo(name=""),
+                        right_wing=rw or PlayerInfo(name=""),
+                    )
+                )
+
+        return lines
+
+    def _parse_defensive_pairs_from_json(
+        self, players_data: list[dict[str, Any]]
+    ) -> list[DefensivePair]:
+        """Parse defensive pairs from JSON players data.
+
+        Args:
+            players_data: List of player dicts from __NEXT_DATA__
+
+        Returns:
+            List of 3 defensive pairs
+        """
+        pairs: list[DefensivePair] = []
+
+        for pair_num in range(1, 4):
+            group_id = f"d{pair_num}"
+
+            # Filter players for this pair
+            pair_players = [
+                p for p in players_data if p.get("groupIdentifier") == group_id
+            ]
+
+            ld = next(
+                (
+                    self._player_from_json(p)
+                    for p in pair_players
+                    if p.get("positionIdentifier") == "ld"
+                ),
+                None,
+            )
+            rd = next(
+                (
+                    self._player_from_json(p)
+                    for p in pair_players
+                    if p.get("positionIdentifier") == "rd"
+                ),
+                None,
+            )
+
+            if ld or rd:
+                pairs.append(
+                    DefensivePair(
+                        pair_number=pair_num,
+                        left_defense=ld or PlayerInfo(name=""),
+                        right_defense=rd or PlayerInfo(name=""),
+                    )
+                )
+
+        return pairs
+
+    def _parse_goalies_from_json(
+        self, players_data: list[dict[str, Any]]
+    ) -> GoalieDepth:
+        """Parse goaltenders from JSON players data.
+
+        Args:
+            players_data: List of player dicts from __NEXT_DATA__
+
+        Returns:
+            GoalieDepth with starter and backup
+        """
+        # Goalies have groupIdentifier="g" but positionIdentifier="g1"/"g2"
+        # g1 = Starting Goalie, g2 = Backup Goalie
+        goalie_players = [p for p in players_data if p.get("groupIdentifier") == "g"]
+
+        starter = next(
+            (
+                self._player_from_json(p)
+                for p in goalie_players
+                if p.get("positionIdentifier") == "g1"
+            ),
+            None,
+        )
+        backup = next(
+            (
+                self._player_from_json(p)
+                for p in goalie_players
+                if p.get("positionIdentifier") == "g2"
+            ),
+            None,
+        )
+
+        return GoalieDepth(starter=starter, backup=backup)
 
     def _parse_forward_lines(self, soup: BeautifulSoup) -> list[ForwardLine]:
         """Parse forward lines from the page.

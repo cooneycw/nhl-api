@@ -24,30 +24,32 @@ logger = logging.getLogger(__name__)
 NHL_API_BASE_URL = "https://api-web.nhle.com/v1"
 
 # Map source names to their source_id in the data_sources table
-# These IDs are seeded in migrations/008_provenance.sql
+# These IDs must match what's in the database (queried from data_sources table)
 SOURCE_NAME_TO_ID = {
+    # NHL JSON API sources (IDs from 008_provenance.sql)
     "nhl_schedule": 1,
     "nhl_boxscore": 2,
     "nhl_pbp": 3,
     "nhl_roster": 4,
     "nhl_standings": 5,
     "nhl_player": 6,
-    "nhl_player_game_log": 7,  # Player game logs
-    # HTML sources (assigned in migration 023)
-    "html_game_summary": 8,
-    "html_event_summary": 9,
-    "html_time_on_ice": 10,
-    "html_faceoff_summary": 11,
-    "html_shot_summary": 12,
-    "shift_chart": 16,  # NHL Stats API shift charts
-    # DailyFaceoff sources (IDs assigned in migration 022)
-    "dailyfaceoff_lines": 20,
-    "dailyfaceoff_power_play": 21,
-    "dailyfaceoff_penalty_kill": 22,
-    "dailyfaceoff_injuries": 23,
-    "dailyfaceoff_starting_goalies": 24,
-    # QuantHockey sources (IDs assigned in migration 023)
-    "quanthockey_player_stats": 25,
+    "nhl_player_game_log": 20,
+    # HTML report sources (IDs from 008_provenance.sql)
+    "html_game_summary": 7,  # Mapped from html_gs
+    "html_event_summary": 8,  # Mapped from html_es
+    "html_time_on_ice": 15,  # Mapped from html_th (home side)
+    "html_faceoff_summary": 10,  # Mapped from html_fs
+    "html_shot_summary": 13,  # Mapped from html_ss
+    # Shift charts (ID from 008_provenance.sql)
+    "shift_chart": 16,
+    # DailyFaceoff sources (IDs from 022_dailyfaceoff.sql)
+    "dailyfaceoff_lines": 18,
+    "dailyfaceoff_power_play": 23,
+    "dailyfaceoff_penalty_kill": 24,
+    "dailyfaceoff_injuries": 25,
+    "dailyfaceoff_starting_goalies": 26,
+    # QuantHockey sources (IDs from 023_quanthockey.sql)
+    "quanthockey_player_stats": 21,
 }
 
 
@@ -662,9 +664,8 @@ class DownloadService:
             total_persisted = 0
             for team_abbrev, data in successful_results:
                 try:
-                    count = await downloader.persist(
-                        db, data, team_abbrev, season_id, snapshot_date
-                    )
+                    # DailyFaceoff persist methods extract team_abbrev from data
+                    count = await downloader.persist(db, data, season_id, snapshot_date)
                     total_persisted += count
                 except Exception as e:
                     logger.warning(
@@ -770,15 +771,21 @@ class DownloadService:
         active_download = self._active_downloads.get(batch_id)
 
         # Map source names to downloader classes
+        # Names must match what's in the data_sources table
         downloader_map: dict[str, type] = {
             "html_game_summary": GameSummaryDownloader,
             "html_event_summary": EventSummaryDownloader,
             "html_faceoff_summary": FaceoffSummaryDownloader,
             "html_shot_summary": ShotSummaryDownloader,
+            # Database aliases (from 008_provenance.sql)
+            "html_gs": GameSummaryDownloader,
+            "html_es": EventSummaryDownloader,
+            "html_fs": FaceoffSummaryDownloader,
+            "html_ss": ShotSummaryDownloader,
         }
 
         # Time on Ice has special handling (home/away sides)
-        is_toi = source_name == "html_time_on_ice"
+        is_toi = source_name in ("html_time_on_ice", "html_th", "html_tv")
 
         # Get completed game IDs from schedule
         schedule_config = DownloaderConfig(base_url=NHL_API_BASE_URL)
