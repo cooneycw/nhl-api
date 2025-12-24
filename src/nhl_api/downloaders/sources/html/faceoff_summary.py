@@ -14,16 +14,20 @@ Example usage:
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from bs4 import BeautifulSoup, Tag
 
 from nhl_api.downloaders.sources.html.base_html_downloader import (
     BaseHTMLDownloader,
 )
+
+if TYPE_CHECKING:
+    from nhl_api.services.db import DatabaseService
 
 logger = logging.getLogger(__name__)
 
@@ -532,3 +536,60 @@ class FaceoffSummaryDownloader(BaseHTMLDownloader):
             "total": stat.total,
             "pct": stat.pct,
         }
+
+    async def persist(
+        self,
+        db: DatabaseService,
+        summaries: list[dict[str, Any]],
+    ) -> int:
+        """Persist faceoff summary data to the database.
+
+        Stores parsed HTML faceoff summary data including zone and strength
+        breakdowns for cross-source validation.
+
+        Args:
+            db: Database service instance
+            summaries: List of parsed faceoff summary dictionaries
+
+        Returns:
+            Number of faceoff summaries persisted
+        """
+        if not summaries:
+            return 0
+
+        count = 0
+        for summary in summaries:
+            game_id = summary.get("game_id")
+            season_id = summary.get("season_id")
+
+            if not game_id or not season_id:
+                logger.warning("Skipping faceoff summary without game_id or season_id")
+                continue
+
+            away_team = summary.get("away_team", {})
+            home_team = summary.get("home_team", {})
+
+            await db.execute(
+                """
+                INSERT INTO html_faceoff_summary (
+                    game_id, season_id, away_team_abbrev, home_team_abbrev,
+                    away_team, home_team, parsed_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+                ON CONFLICT (game_id, season_id) DO UPDATE SET
+                    away_team_abbrev = EXCLUDED.away_team_abbrev,
+                    home_team_abbrev = EXCLUDED.home_team_abbrev,
+                    away_team = EXCLUDED.away_team,
+                    home_team = EXCLUDED.home_team,
+                    parsed_at = CURRENT_TIMESTAMP
+                """,
+                game_id,
+                season_id,
+                away_team.get("abbrev"),
+                home_team.get("abbrev"),
+                json.dumps(away_team),
+                json.dumps(home_team),
+            )
+            count += 1
+
+        logger.info("Persisted %d HTML faceoff summaries", count)
+        return count

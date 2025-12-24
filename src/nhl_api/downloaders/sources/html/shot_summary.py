@@ -14,16 +14,20 @@ Example usage:
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from bs4 import BeautifulSoup, Tag
 
 from nhl_api.downloaders.sources.html.base_html_downloader import (
     BaseHTMLDownloader,
 )
+
+if TYPE_CHECKING:
+    from nhl_api.services.db import DatabaseService
 
 logger = logging.getLogger(__name__)
 
@@ -534,3 +538,65 @@ class ShotSummaryDownloader(BaseHTMLDownloader):
             "total_goals": player.total_goals,
             "periods": [self._period_to_dict(p) for p in player.periods],
         }
+
+    async def persist(
+        self,
+        db: DatabaseService,
+        summaries: list[dict[str, Any]],
+    ) -> int:
+        """Persist shot summary data to the database.
+
+        Stores parsed HTML shot summary data including period and situation
+        breakdowns for cross-source validation.
+
+        Args:
+            db: Database service instance
+            summaries: List of parsed shot summary dictionaries
+
+        Returns:
+            Number of shot summaries persisted
+        """
+        if not summaries:
+            return 0
+
+        count = 0
+        for summary in summaries:
+            game_id = summary.get("game_id")
+            season_id = summary.get("season_id")
+
+            if not game_id or not season_id:
+                logger.warning("Skipping shot summary without game_id or season_id")
+                continue
+
+            away_team = summary.get("away_team", {})
+            home_team = summary.get("home_team", {})
+
+            await db.execute(
+                """
+                INSERT INTO html_shot_summary (
+                    game_id, season_id, away_team_abbrev, home_team_abbrev,
+                    away_periods, home_periods, away_players, home_players,
+                    parsed_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
+                ON CONFLICT (game_id, season_id) DO UPDATE SET
+                    away_team_abbrev = EXCLUDED.away_team_abbrev,
+                    home_team_abbrev = EXCLUDED.home_team_abbrev,
+                    away_periods = EXCLUDED.away_periods,
+                    home_periods = EXCLUDED.home_periods,
+                    away_players = EXCLUDED.away_players,
+                    home_players = EXCLUDED.home_players,
+                    parsed_at = CURRENT_TIMESTAMP
+                """,
+                game_id,
+                season_id,
+                away_team.get("abbrev"),
+                home_team.get("abbrev"),
+                json.dumps(away_team.get("periods", [])),
+                json.dumps(home_team.get("periods", [])),
+                json.dumps(away_team.get("players", [])),
+                json.dumps(home_team.get("players", [])),
+            )
+            count += 1
+
+        logger.info("Persisted %d HTML shot summaries", count)
+        return count
