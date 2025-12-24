@@ -36,6 +36,7 @@ from nhl_api.viewer.routers import (
     entities,
     health,
     monitoring,
+    quanthockey,
     reconciliation,
     validation,
 )
@@ -124,6 +125,7 @@ def create_app() -> FastAPI:
     app.include_router(coverage.router, prefix=f"/api/{settings.api_version}")
     app.include_router(dailyfaceoff.router, prefix=f"/api/{settings.api_version}")
     app.include_router(downloads.router, prefix=f"/api/{settings.api_version}")
+    app.include_router(quanthockey.router, prefix=f"/api/{settings.api_version}")
     app.include_router(monitoring.router, prefix=f"/api/{settings.api_version}")
     app.include_router(entities.router, prefix=f"/api/{settings.api_version}")
     app.include_router(reconciliation.router, prefix=f"/api/{settings.api_version}")
