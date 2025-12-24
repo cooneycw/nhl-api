@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any
 
 from nhl_api.downloaders.base.base_downloader import DownloaderConfig
@@ -71,6 +71,18 @@ class ActiveDownloadTask:
     items_total: int | None = None
     items_completed: int = 0
     items_failed: int = 0
+
+
+@dataclass
+class SyncTimestamp:
+    """Represents a sync timestamp from the database."""
+
+    source_id: int
+    season_id: int
+    game_type: int
+    last_synced_at: datetime
+    items_synced_count: int
+    last_batch_id: int | None
 
 
 @dataclass
@@ -227,6 +239,95 @@ class DownloadService:
 
         return result
 
+    async def _get_last_sync(
+        self,
+        db: DatabaseService,
+        source_id: int,
+        season_id: int,
+        game_type: int,
+    ) -> SyncTimestamp | None:
+        """Get last sync timestamp for a source/season/game_type.
+
+        Args:
+            db: Database service
+            source_id: Source ID from data_sources table
+            season_id: Season ID (e.g., 20242025)
+            game_type: Game type (1=pre, 2=regular, 3=playoffs, 0=external)
+
+        Returns:
+            SyncTimestamp if found, None otherwise
+        """
+        row = await db.fetchrow(
+            """
+            SELECT source_id, season_id, game_type, last_synced_at,
+                   items_synced_count, last_batch_id
+            FROM source_sync_timestamps
+            WHERE source_id = $1 AND season_id = $2 AND game_type = $3
+            """,
+            source_id,
+            season_id,
+            game_type,
+        )
+
+        if not row:
+            return None
+
+        return SyncTimestamp(
+            source_id=row["source_id"],
+            season_id=row["season_id"],
+            game_type=row["game_type"],
+            last_synced_at=row["last_synced_at"],
+            items_synced_count=row["items_synced_count"],
+            last_batch_id=row["last_batch_id"],
+        )
+
+    async def _update_sync_timestamp(
+        self,
+        db: DatabaseService,
+        source_id: int,
+        season_id: int,
+        game_type: int,
+        items_count: int,
+        batch_id: int,
+    ) -> None:
+        """Update sync timestamp after successful batch.
+
+        Uses upsert to create or update the timestamp.
+
+        Args:
+            db: Database service
+            source_id: Source ID from data_sources table
+            season_id: Season ID
+            game_type: Game type (1=pre, 2=regular, 3=playoffs, 0=external)
+            items_count: Number of items synced in this batch
+            batch_id: The batch ID that completed the sync
+        """
+        await db.execute(
+            """
+            INSERT INTO source_sync_timestamps
+                (source_id, season_id, game_type, last_synced_at, items_synced_count, last_batch_id)
+            VALUES ($1, $2, $3, CURRENT_TIMESTAMP, $4, $5)
+            ON CONFLICT (source_id, season_id, game_type) DO UPDATE SET
+                last_synced_at = CURRENT_TIMESTAMP,
+                items_synced_count = source_sync_timestamps.items_synced_count + EXCLUDED.items_synced_count,
+                last_batch_id = EXCLUDED.last_batch_id,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            source_id,
+            season_id,
+            game_type,
+            items_count,
+            batch_id,
+        )
+
+        logger.debug(
+            "Updated sync timestamp: source=%d season=%d game_type=%d items=%d",
+            source_id,
+            season_id,
+            game_type,
+            items_count,
+        )
+
     async def _run_download(
         self,
         db: DatabaseService,
@@ -326,7 +427,7 @@ class DownloadService:
                     db, batch_id, downloader, season_id, game_types, active_download
                 )
             elif source_name in ("nhl_boxscore", "nhl_pbp"):
-                await self._download_game_based(
+                items_synced = await self._download_game_based(
                     db,
                     batch_id,
                     downloader,
@@ -335,6 +436,13 @@ class DownloadService:
                     active_download,
                     source_name,
                 )
+                # Update sync timestamps for each game_type
+                source_id = SOURCE_NAME_TO_ID.get(source_name)
+                if source_id and items_synced > 0:
+                    for gt in game_types:
+                        await self._update_sync_timestamp(
+                            db, source_id, season_id, gt, items_synced, batch_id
+                        )
             elif source_name == "nhl_roster":
                 await self._download_rosters(
                     db, batch_id, downloader, season_id, active_download
@@ -381,11 +489,41 @@ class DownloadService:
         # Filter by game types first, then by completed status
         type_filtered = [g for g in all_games if g.game_type in game_types]
         completed_games = [g for g in type_filtered if g.game_state in ("OFF", "FINAL")]
-        game_ids = [g.game_id for g in completed_games]
+
+        # Delta filtering: Check last sync timestamp and filter by game date
+        source_id = SOURCE_NAME_TO_ID.get(source_name)
+        delta_filtered_games = completed_games
+        is_delta_sync = False
+
+        if source_id:
+            # Get the earliest sync timestamp across all specified game_types
+            earliest_sync: datetime | None = None
+            for gt in game_types:
+                sync_ts = await self._get_last_sync(db, source_id, season_id, gt)
+                if sync_ts:
+                    if earliest_sync is None or sync_ts.last_synced_at < earliest_sync:
+                        earliest_sync = sync_ts.last_synced_at
+
+            if earliest_sync:
+                # Filter to games after the earliest sync
+                sync_date = earliest_sync.date()
+                delta_filtered_games = [
+                    g for g in completed_games if g.game_date > sync_date
+                ]
+                is_delta_sync = True
+                logger.info(
+                    "Shift charts delta sync: filtering %d completed games to %d since %s",
+                    len(completed_games),
+                    len(delta_filtered_games),
+                    sync_date.isoformat(),
+                )
+
+        game_ids = [g.game_id for g in delta_filtered_games]
 
         logger.info(
-            "Downloading shift charts for %d completed games (game_types=%s, %d total)",
+            "Downloading shift charts for %d %sgames (game_types=%s, %d total)",
             len(game_ids),
+            "delta " if is_delta_sync else "completed ",
             game_types,
             len(all_games),
         )
@@ -436,6 +574,13 @@ class DownloadService:
                 season_id,
             )
 
+            # Update sync timestamps for each game_type
+            if source_id:
+                for gt in game_types:
+                    await self._update_sync_timestamp(
+                        db, source_id, season_id, gt, len(successful_results), batch_id
+                    )
+
         await self._complete_batch(db, batch_id, "completed")
 
     async def _run_dailyfaceoff_download(
@@ -451,8 +596,6 @@ class DownloadService:
         DailyFaceoff data is team-based (not game-based), so we iterate
         through all 32 teams rather than games.
         """
-        from datetime import date
-
         from nhl_api.downloaders.sources.dailyfaceoff import (
             DailyFaceoffConfig,
             InjuryDownloader,
@@ -518,8 +661,6 @@ class DownloadService:
         QuantHockey data is season-based (not game or team based), so we
         download all player stats for the entire season in one batch.
         """
-        from datetime import date
-
         from nhl_api.downloaders.sources.external.quanthockey import (
             QuantHockeyConfig,
             QuantHockeyPlayerStatsDownloader,
@@ -796,15 +937,45 @@ class DownloadService:
         # Filter by game types and completed status
         type_filtered = [g for g in all_games if g.game_type in game_types]
         completed_games = [g for g in type_filtered if g.game_state in ("OFF", "FINAL")]
-        game_ids = [g.game_id for g in completed_games]
+
+        # Delta filtering: Check last sync timestamp and filter by game date
+        source_id = SOURCE_NAME_TO_ID.get(source_name)
+        delta_filtered_games = completed_games
+        is_delta_sync = False
+
+        if source_id:
+            # Get the earliest sync timestamp across all specified game_types
+            earliest_sync: datetime | None = None
+            for gt in game_types:
+                sync_ts = await self._get_last_sync(db, source_id, season_id, gt)
+                if sync_ts:
+                    if earliest_sync is None or sync_ts.last_synced_at < earliest_sync:
+                        earliest_sync = sync_ts.last_synced_at
+
+            if earliest_sync:
+                # Filter to games after the earliest sync
+                sync_date = earliest_sync.date()
+                delta_filtered_games = [
+                    g for g in completed_games if g.game_date > sync_date
+                ]
+                is_delta_sync = True
+                logger.info(
+                    "HTML report delta sync: filtering %d completed games to %d since %s",
+                    len(completed_games),
+                    len(delta_filtered_games),
+                    sync_date.isoformat(),
+                )
+
+        game_ids = [g.game_id for g in delta_filtered_games]
 
         # For TOI, we download both home and away for each game
         total_items = len(game_ids) * 2 if is_toi else len(game_ids)
 
         logger.info(
-            "Downloading %s for %d completed games (game_types=%s)",
+            "Downloading %s for %d %sgames (game_types=%s)",
             source_name,
             len(game_ids),
+            "delta " if is_delta_sync else "completed ",
             game_types,
         )
 
@@ -896,6 +1067,18 @@ class DownloadService:
                     season_id,
                 )
 
+                # Update sync timestamps for each game_type
+                if source_id:
+                    for gt in game_types:
+                        await self._update_sync_timestamp(
+                            db,
+                            source_id,
+                            season_id,
+                            gt,
+                            len(successful_results),
+                            batch_id,
+                        )
+
         await self._complete_batch(db, batch_id, "completed")
 
     async def _download_schedule(
@@ -953,9 +1136,16 @@ class DownloadService:
         game_types: list[int],
         active_download: ActiveDownloadTask | None,
         source_name: str = "",
-    ) -> None:
-        """Download game-based data (boxscore, play-by-play)."""
+    ) -> int:
+        """Download game-based data (boxscore, play-by-play) with delta tracking.
+
+        Returns:
+            Number of items successfully downloaded (for sync timestamp tracking)
+        """
         from nhl_api.downloaders.sources.nhl_json import ScheduleDownloader
+
+        # Get source_id for sync timestamp lookup
+        source_id = SOURCE_NAME_TO_ID.get(source_name)
 
         # First get game IDs from schedule
         schedule_config = DownloaderConfig(base_url=NHL_API_BASE_URL)
@@ -966,13 +1156,43 @@ class DownloadService:
         # Filter by game types first, then by completed status
         type_filtered = [g for g in all_games if g.game_type in game_types]
         completed_games = [g for g in type_filtered if g.game_state in ("OFF", "FINAL")]
-        game_ids = [g.game_id for g in completed_games]
+
+        # Delta filtering: Check last sync timestamp and filter by game date
+        delta_filtered_games = completed_games
+        is_delta_sync = False
+
+        if source_id:
+            # Get the earliest sync timestamp across all specified game_types
+            earliest_sync: datetime | None = None
+            for gt in game_types:
+                sync_ts = await self._get_last_sync(db, source_id, season_id, gt)
+                if sync_ts:
+                    if earliest_sync is None or sync_ts.last_synced_at < earliest_sync:
+                        earliest_sync = sync_ts.last_synced_at
+
+            if earliest_sync:
+                # Filter to games after the earliest sync
+                # Convert datetime to date for comparison with game_date
+                sync_date = earliest_sync.date()
+                delta_filtered_games = [
+                    g for g in completed_games if g.game_date > sync_date
+                ]
+                is_delta_sync = True
+                logger.info(
+                    "Delta sync: filtering %d completed games to %d since %s",
+                    len(completed_games),
+                    len(delta_filtered_games),
+                    sync_date.isoformat(),
+                )
+
+        game_ids = [g.game_id for g in delta_filtered_games]
         downloader.set_game_ids(game_ids)
 
         logger.info(
-            "Downloading %s for %d completed games (game_types=%s, %d total in season)",
+            "Downloading %s for %d %sgames (game_types=%s, %d total in season)",
             source_name,
             len(game_ids),
+            "delta " if is_delta_sync else "completed ",
             game_types,
             len(all_games),
         )
@@ -1026,6 +1246,8 @@ class DownloadService:
                     persisted,
                     season_id,
                 )
+
+        return len(successful_results)
 
     async def _download_rosters(
         self,
