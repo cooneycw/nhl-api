@@ -5,7 +5,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useTeamLines, useTeamPowerPlay, useTeamPenaltyKill, useLineHistory } from '@/hooks/useDailyFaceoff'
-import { useTeams } from '@/hooks/useTeams'
 import type { PlayerLineupEntry, PowerPlayPlayerEntry, PenaltyKillPlayerEntry } from '@/lib/api'
 
 // NHL team abbreviations for selector

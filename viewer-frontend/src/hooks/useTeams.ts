@@ -94,7 +94,6 @@ export function useTeams(filters: TeamFilters = {}) {
     queryKey: ['teams', filters],
     queryFn: () => api.get<TeamListResponse>('/teams', params),
     staleTime: 5 * 60 * 1000,
-    enabled: filters.season_id !== undefined, // Wait for season to be selected
   })
 }
 

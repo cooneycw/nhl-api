@@ -1,16 +1,35 @@
-import { useState } from 'react'
-import { ChevronLeft, ChevronRight, ExternalLink, AlertCircle } from 'lucide-react'
+import { useEffect, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, ExternalLink, AlertCircle, X } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   useGames,
   type GameSummary,
   type GameFilters,
 } from '@/hooks/useGames'
+import { useTeams } from '@/hooks/useTeams'
+import { useSeason } from '@/contexts/SeasonContext'
 import { TeamLink, GameLink, formatGameDate } from '@/components/EntityLinks'
+
+// Game type options
+const GAME_TYPES = [
+  { value: 'all', label: 'All Types' },
+  { value: 'R', label: 'Regular Season' },
+  { value: 'P', label: 'Playoffs' },
+  { value: 'PR', label: 'Preseason' },
+] as const
 
 // Get game outcome badge
 function GameOutcomeBadge({ game }: { game: GameSummary }) {
@@ -117,24 +136,78 @@ function GamesList({
 
 // Main Games Page
 export function Games() {
-  const [filters, setFilters] = useState<GameFilters>({
-    page: 1,
-    per_page: 25,
-    season: '20242025',
-  })
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { seasons, isLoading: seasonsLoading } = useSeason()
+  const { data: teamsData, isLoading: teamsLoading } = useTeams({ active_only: true })
+
+  // Flatten teams for the dropdown
+  const allTeams = useMemo(() => {
+    if (!teamsData?.divisions) return []
+    return teamsData.divisions
+      .flatMap((d) => d.teams)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [teamsData])
+
+  // Parse filters from URL
+  const filters: GameFilters = useMemo(() => {
+    const defaultSeason = seasons.find((s) => s.is_current)?.season_id?.toString() || '20242025'
+    return {
+      page: parseInt(searchParams.get('page') || '1', 10),
+      per_page: 25,
+      season: searchParams.get('season') || defaultSeason,
+      team_id: searchParams.get('team') ? parseInt(searchParams.get('team')!, 10) : undefined,
+      game_type: (searchParams.get('type') as GameFilters['game_type']) || undefined,
+      start_date: searchParams.get('from') || undefined,
+      end_date: searchParams.get('to') || undefined,
+    }
+  }, [searchParams, seasons])
+
+  // Sync default season to URL on first load
+  useEffect(() => {
+    if (!searchParams.has('season') && seasons.length > 0) {
+      const defaultSeason = seasons.find((s) => s.is_current)?.season_id?.toString() || '20242025'
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('season', defaultSeason)
+        return next
+      }, { replace: true })
+    }
+  }, [seasons, searchParams, setSearchParams])
 
   const { data, isLoading, error } = useGames(filters)
 
   const games = data?.games || []
   const pagination = data?.pagination
 
-  const handlePageChange = (newPage: number) => {
-    setFilters((prev) => ({ ...prev, page: newPage }))
+  // Update URL params helper
+  const updateFilters = (updates: Partial<Record<string, string | undefined>>) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value === undefined || value === '' || value === 'all') {
+          next.delete(key)
+        } else {
+          next.set(key, value)
+        }
+      })
+      // Reset to page 1 when filters change (except for page itself)
+      if (!('page' in updates)) {
+        next.set('page', '1')
+      }
+      return next
+    })
   }
 
-  const handleSeasonChange = (season: string) => {
-    setFilters((prev) => ({ ...prev, season, page: 1 }))
+  const handlePageChange = (newPage: number) => {
+    updateFilters({ page: String(newPage) })
   }
+
+  const clearFilters = () => {
+    const defaultSeason = seasons.find((s) => s.is_current)?.season_id?.toString() || '20242025'
+    setSearchParams({ season: defaultSeason })
+  }
+
+  const hasActiveFilters = filters.team_id || filters.game_type || filters.start_date || filters.end_date
 
   return (
     <div className="space-y-6">
@@ -142,53 +215,121 @@ export function Games() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Games</h1>
         <p className="text-muted-foreground">
-          Browse NHL games by date and team
+          Browse NHL games by season, team, and date
         </p>
       </div>
 
       {/* Filters */}
       <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle>Filters</CardTitle>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 px-2">
+                <X className="mr-1 h-4 w-4" />
+                Clear filters
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-4">
-            <div className="space-y-1">
-              <label className="text-sm text-muted-foreground">Season</label>
-              <div className="flex gap-2">
-                {['20242025', '20232024', '20222023'].map((season) => (
-                  <Button
-                    key={season}
-                    variant={filters.season === season ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => handleSeasonChange(season)}
-                  >
-                    {season.slice(0, 4)}-{season.slice(4)}
-                  </Button>
-                ))}
-              </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            {/* Season Select */}
+            <div className="space-y-2">
+              <label htmlFor="season-select" className="text-sm font-medium">
+                Season
+              </label>
+              <Select
+                value={filters.season || ''}
+                onValueChange={(value) => updateFilters({ season: value })}
+                disabled={seasonsLoading}
+              >
+                <SelectTrigger id="season-select">
+                  <SelectValue placeholder="Select season" />
+                </SelectTrigger>
+                <SelectContent>
+                  {seasons.map((season) => (
+                    <SelectItem key={season.season_id} value={String(season.season_id)}>
+                      {season.label}
+                      {season.is_current && ' (Current)'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="space-y-1">
-              <label className="text-sm text-muted-foreground">Game Type</label>
-              <div className="flex gap-2">
-                {[
-                  { value: undefined, label: 'All' },
-                  { value: 'R' as const, label: 'Regular' },
-                  { value: 'P' as const, label: 'Playoff' },
-                  { value: 'PR' as const, label: 'Preseason' },
-                ].map((type) => (
-                  <Button
-                    key={type.label}
-                    variant={filters.game_type === type.value ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() =>
-                      setFilters((prev) => ({ ...prev, game_type: type.value, page: 1 }))
-                    }
-                  >
-                    {type.label}
-                  </Button>
-                ))}
-              </div>
+
+            {/* Game Type Select */}
+            <div className="space-y-2">
+              <label htmlFor="type-select" className="text-sm font-medium">
+                Game Type
+              </label>
+              <Select
+                value={filters.game_type || 'all'}
+                onValueChange={(value) => updateFilters({ type: value === 'all' ? undefined : value })}
+              >
+                <SelectTrigger id="type-select">
+                  <SelectValue placeholder="All types" />
+                </SelectTrigger>
+                <SelectContent>
+                  {GAME_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Team Select */}
+            <div className="space-y-2">
+              <label htmlFor="team-select" className="text-sm font-medium">
+                Team
+              </label>
+              <Select
+                value={filters.team_id ? String(filters.team_id) : 'all'}
+                onValueChange={(value) => updateFilters({ team: value === 'all' ? undefined : value })}
+                disabled={teamsLoading}
+              >
+                <SelectTrigger id="team-select">
+                  <SelectValue placeholder="All teams" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Teams</SelectItem>
+                  {allTeams.map((team) => (
+                    <SelectItem key={team.team_id} value={String(team.team_id)}>
+                      {team.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Date Range - From */}
+            <div className="space-y-2">
+              <label htmlFor="date-from" className="text-sm font-medium">
+                From Date
+              </label>
+              <Input
+                id="date-from"
+                type="date"
+                value={filters.start_date || ''}
+                onChange={(e) => updateFilters({ from: e.target.value || undefined })}
+                className="w-full"
+              />
+            </div>
+
+            {/* Date Range - To */}
+            <div className="space-y-2">
+              <label htmlFor="date-to" className="text-sm font-medium">
+                To Date
+              </label>
+              <Input
+                id="date-to"
+                type="date"
+                value={filters.end_date || ''}
+                onChange={(e) => updateFilters({ to: e.target.value || undefined })}
+                className="w-full"
+              />
             </div>
           </div>
         </CardContent>
