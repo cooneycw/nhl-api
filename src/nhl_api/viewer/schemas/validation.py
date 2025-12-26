@@ -216,3 +216,62 @@ class DiscrepanciesResponse(BaseModel):
     page: int = Field(ge=1, description="Current page number")
     page_size: int = Field(ge=1, description="Items per page")
     pages: int = Field(ge=0, description="Total number of pages")
+
+
+# =============================================================================
+# Validation Trigger
+# =============================================================================
+
+
+class ValidationRunRequest(BaseModel):
+    """Request to trigger a validation run."""
+
+    season_id: int | None = Field(
+        default=None, description="Season to validate (e.g., 20242025)"
+    )
+    game_id: int | None = Field(default=None, description="Single game ID to validate")
+    validator_types: list[str] | None = Field(
+        default=None,
+        description="Validator types to run: json_cross_source, json_vs_html, internal",
+    )
+
+
+class ValidationRunResponse(BaseModel):
+    """Response from triggering a validation run."""
+
+    run_id: int = Field(description="ID of the created validation run")
+    status: str = Field(description="Run status: running, completed, failed")
+    message: str = Field(description="Status message")
+
+
+# =============================================================================
+# Season Summary
+# =============================================================================
+
+
+class SourceAccuracy(BaseModel):
+    """Accuracy metrics for a single data source."""
+
+    source: str = Field(description="Source name")
+    total_games: int = Field(ge=0, description="Total games with data from this source")
+    accuracy_percentage: float = Field(ge=0, le=100, description="Accuracy percentage")
+    total_discrepancies: int = Field(ge=0, description="Total discrepancies")
+
+
+class SeasonSummary(BaseModel):
+    """Season-wide validation summary."""
+
+    season_id: int = Field(description="Season ID (e.g., 20242025)")
+    season_display: str = Field(description="Display format (e.g., 2024-2025)")
+    total_games: int = Field(ge=0, description="Total games analyzed")
+    reconciled_games: int = Field(ge=0, description="Games with no discrepancies")
+    failed_games: int = Field(ge=0, description="Games with discrepancies")
+    reconciliation_percentage: float = Field(
+        ge=0, le=100, description="Percentage of games reconciled successfully"
+    )
+    total_goals: int = Field(ge=0, description="Total goals in season")
+    games_with_discrepancies: int = Field(ge=0, description="Games with any issues")
+    source_accuracy: list[SourceAccuracy] = Field(description="Accuracy by data source")
+    common_discrepancies: dict[str, int] = Field(
+        description="Count by discrepancy type"
+    )
