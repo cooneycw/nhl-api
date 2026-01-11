@@ -21,6 +21,7 @@ Issue: #259 - Second-by-Second Analytics
 Issue: #261 - Wave 3: Matchup Analysis
 """
 
+from nhl_api.models.matchups import Zone
 from nhl_api.services.analytics.event_attributor import (
     AttributionResult,
     EventAttribution,
@@ -43,7 +44,6 @@ from nhl_api.services.analytics.situation import (
     SituationType,
 )
 from nhl_api.services.analytics.zone_detection import (
-    Zone,
     ZoneDetector,
     ZoneResult,
 )
