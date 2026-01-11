@@ -116,6 +116,9 @@ async def _start_downloads(
 ) -> list[int]:
     """Start download batches for given sources.
 
+    Schedule downloads run first to ensure game records exist before
+    other game-based downloads attempt to persist their data.
+
     Args:
         db: Database service
         sources: List of source names to download
@@ -129,7 +132,29 @@ async def _start_downloads(
     service = DownloadService.get_instance()
     batch_ids: list[int] = []
 
-    for source_name in sources:
+    # Run schedule first if present - other sources depend on game records existing
+    if "nhl_schedule" in sources:
+        try:
+            schedule_batch_id = await service.start_download(
+                db=db,
+                source_name="nhl_schedule",
+                season_id=season_id,
+                game_types=game_types,
+                force=False,
+            )
+            batch_ids.append(schedule_batch_id)
+
+            # Wait for schedule to complete before starting dependent downloads
+            schedule_task = service._active_downloads.get(schedule_batch_id)
+            if schedule_task:
+                await schedule_task.task
+        except ValueError:
+            # Schedule already running or can't be started
+            pass
+
+    # Start remaining sources in parallel
+    remaining_sources = [s for s in sources if s != "nhl_schedule"]
+    for source_name in remaining_sources:
         try:
             batch_id = await service.start_download(
                 db=db,
