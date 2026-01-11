@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -46,6 +47,8 @@ import {
   useQuickExternal,
   useQuickPriorSeason,
 } from '@/hooks/useQuickDownloads'
+import { useCoverage } from '@/hooks/useCoverage'
+import { GasTankGauge } from '@/components/GasTankGauge'
 import {
   Download,
   X,
@@ -63,6 +66,8 @@ import {
   Clock,
   CheckCircle,
   AlertTriangle,
+  Fuel,
+  ExternalLink,
 } from 'lucide-react'
 
 // Source types to auto-select by default (NHL API sources)
@@ -104,6 +109,9 @@ export function Downloads() {
   // Quick download hooks
   const { data: syncStatus, isLoading: syncLoading } = useSyncStatus()
   const { data: priorSeasons, isLoading: seasonsLoading } = usePriorSeasons()
+
+  // Coverage data for inventory view
+  const { data: coverage, isLoading: coverageLoading } = useCoverage({ includeAll: false })
   const quickPreseason = useQuickPreseason()
   const quickRegular = useQuickRegular()
   const quickPlayoffs = useQuickPlayoffs()
@@ -428,6 +436,72 @@ export function Downloads() {
               </div>
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Data Inventory - Coverage Overview */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Fuel className="h-5 w-5" />
+                Data Inventory
+              </CardTitle>
+              <CardDescription>
+                Data completeness at a glance - see how "full the tank is"
+              </CardDescription>
+            </div>
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/coverage" className="flex items-center gap-1">
+                View Details
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {coverageLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <Skeleton key={i} className="h-20" />
+              ))}
+            </div>
+          ) : !coverage?.seasons.length ? (
+            <div className="flex h-16 items-center justify-center text-muted-foreground">
+              No coverage data available. Run some downloads first.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Show current season (first one when includeAll=false) */}
+              {coverage.seasons.slice(0, 1).map((season) => (
+                <div key={season.season_id}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="font-medium text-sm">{season.season_label}</span>
+                    {season.is_current && (
+                      <Badge variant="secondary" className="text-xs">Current</Badge>
+                    )}
+                    <span className="text-xs text-muted-foreground ml-auto">
+                      {season.game_logs_total.toLocaleString()} game logs
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    {season.categories.map((cat) => (
+                      <GasTankGauge
+                        key={cat.name}
+                        label={cat.display_name}
+                        actual={cat.actual}
+                        expected={cat.expected}
+                        percentage={cat.percentage}
+                        linkPath={cat.link_path}
+                        compact
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
