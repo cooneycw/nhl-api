@@ -926,7 +926,17 @@ class DownloadService:
         }
 
         # Time on Ice has special handling (home/away sides)
+        # - html_th: home team TOI only
+        # - html_tv: visitor/away team TOI only
+        # - html_time_on_ice: both home and away
         is_toi = source_name in ("html_time_on_ice", "html_th", "html_tv")
+        toi_sides: list[str] = []
+        if source_name == "html_th":
+            toi_sides = ["home"]
+        elif source_name == "html_tv":
+            toi_sides = ["away"]
+        elif source_name == "html_time_on_ice":
+            toi_sides = ["home", "away"]
 
         # Get completed game IDs from schedule
         schedule_config = DownloaderConfig(base_url=NHL_API_BASE_URL)
@@ -968,8 +978,8 @@ class DownloadService:
 
         game_ids = [g.game_id for g in delta_filtered_games]
 
-        # For TOI, we download both home and away for each game
-        total_items = len(game_ids) * 2 if is_toi else len(game_ids)
+        # For TOI, multiply by number of sides (1 for html_th/html_tv, 2 for html_time_on_ice)
+        total_items = len(game_ids) * len(toi_sides) if is_toi else len(game_ids)
 
         logger.info(
             "Downloading %s for %d %sgames (game_types=%s)",
@@ -991,8 +1001,8 @@ class DownloadService:
         successful_results: list[dict[str, Any]] = []
 
         if is_toi:
-            # Download both home and away TOI
-            for side in ["home", "away"]:
+            # Download TOI for specified sides (home only, away only, or both)
+            for side in toi_sides:
                 downloader = TimeOnIceDownloader(config, side=side)
                 downloader.set_game_ids(game_ids)
 
