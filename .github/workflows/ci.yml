@@ -55,7 +55,7 @@ jobs:
         run: uv sync --frozen --extra lint --extra test --extra viewer --extra scraping
 
       - name: Run mypy
-        run: uv run mypy .
+        run: uv run mypy
 
   test:
     name: Test (Python ${{ matrix.python-version }})
