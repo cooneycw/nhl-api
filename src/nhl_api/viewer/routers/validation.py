@@ -20,8 +20,11 @@ from nhl_api.viewer.schemas.validation import (
     DiscrepancyDetail,
     QualityScore,
     QualityScoresResponse,
+    SeasonSummary,
     ValidationRulesResponse,
     ValidationRunDetail,
+    ValidationRunRequest,
+    ValidationRunResponse,
     ValidationRunsResponse,
 )
 from nhl_api.viewer.services.validation_service import ValidationService
@@ -265,6 +268,72 @@ async def get_discrepancy(
     """
     try:
         return await _service.get_discrepancy(db, discrepancy_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from None
+
+
+# =============================================================================
+# Trigger Validation Run
+# =============================================================================
+
+
+@router.post(
+    "/run",
+    response_model=ValidationRunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Trigger Validation Run",
+    description="Start a validation run for a season or game",
+)
+async def trigger_validation_run(
+    db: DbDep,
+    request: ValidationRunRequest,
+) -> ValidationRunResponse:
+    """Trigger a new validation run.
+
+    Can validate:
+    - A specific game (by game_id)
+    - An entire season (by season_id)
+    - Specific validator types: json_cross_source, json_vs_html, internal
+
+    Returns immediately with a run_id to track progress.
+    """
+    return await _service.trigger_validation_run(
+        db,
+        season_id=request.season_id,
+        game_id=request.game_id,
+        validator_types=request.validator_types,
+    )
+
+
+# =============================================================================
+# Season Summary
+# =============================================================================
+
+
+@router.get(
+    "/summary/{season_id}",
+    response_model=SeasonSummary,
+    status_code=status.HTTP_200_OK,
+    summary="Season Validation Summary",
+    description="Get comprehensive validation summary for a season",
+)
+async def get_season_summary(
+    db: DbDep,
+    season_id: int,
+) -> SeasonSummary:
+    """Get season-wide validation summary.
+
+    Includes:
+    - Total games analyzed and reconciliation percentage
+    - Accuracy by data source
+    - Common discrepancy types
+    - Goal reconciliation metrics
+    """
+    try:
+        return await _service.get_season_summary(db, season_id)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

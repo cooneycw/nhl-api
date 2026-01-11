@@ -31,6 +31,8 @@ import {
 import {
   useValidationRuns,
   useDiscrepancies,
+  useSeasonSummary,
+  useTriggerValidation,
   type ValidationRunSummary,
 } from '@/hooks/useValidation'
 import {
@@ -46,7 +48,18 @@ import {
   FileWarning,
   ClipboardCheck,
   ListChecks,
+  LineChart as LineChartIcon,
 } from 'lucide-react'
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts'
 
 // Available seasons - could be fetched from API in future
 const SEASONS = [
@@ -84,11 +97,23 @@ export function Validation() {
     pageSize: 5,
   })
 
+  // Season summary for source accuracy
+  const { data: seasonSummary, isLoading: summaryLoading } = useSeasonSummary(seasonId)
+  const triggerValidation = useTriggerValidation()
+
   const handleRunReconciliation = async () => {
     try {
       await triggerReconciliation.mutateAsync({ season_id: seasonId })
     } catch (error) {
       console.error('Failed to trigger reconciliation:', error)
+    }
+  }
+
+  const handleRunValidation = async () => {
+    try {
+      await triggerValidation.mutateAsync({ season_id: seasonId })
+    } catch (error) {
+      console.error('Failed to trigger validation:', error)
     }
   }
 
@@ -663,6 +688,220 @@ export function Validation() {
                     </div>
                   )}
                 </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Source Accuracy Matrix */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Source Accuracy</CardTitle>
+                  <CardDescription>
+                    Data quality by source for {seasonSummary?.season_display || 'current season'}
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRunValidation}
+                  disabled={triggerValidation.isPending}
+                >
+                  {triggerValidation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Running...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="mr-2 h-4 w-4" />
+                      Run Validation
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {summaryLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ) : !seasonSummary?.source_accuracy.length ? (
+                <div className="flex h-24 items-center justify-center text-muted-foreground">
+                  <div className="text-center">
+                    <AlertTriangle className="h-6 w-6 mx-auto mb-2" />
+                    <p>No validation data available</p>
+                    <p className="text-sm">Run validation to see source accuracy</p>
+                  </div>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Source</TableHead>
+                      <TableHead className="text-center">Games</TableHead>
+                      <TableHead className="text-center">Accuracy</TableHead>
+                      <TableHead className="text-center">Discrepancies</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {seasonSummary.source_accuracy.map((source) => (
+                      <TableRow key={source.source}>
+                        <TableCell className="font-medium">
+                          {source.source}
+                        </TableCell>
+                        <TableCell className="text-center text-muted-foreground">
+                          {source.total_games}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <Progress
+                              value={source.accuracy_percentage}
+                              className="w-16 h-2"
+                            />
+                            <span className="text-sm font-medium">
+                              {source.accuracy_percentage.toFixed(1)}%
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {source.total_discrepancies > 0 ? (
+                            <Badge variant="outline" className="text-yellow-600">
+                              {source.total_discrepancies}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-green-600">
+                              0
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {source.accuracy_percentage >= 95 ? (
+                            <CheckCircle2 className="h-5 w-5 text-green-500" />
+                          ) : source.accuracy_percentage >= 80 ? (
+                            <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                          ) : (
+                            <XCircle className="h-5 w-5 text-red-500" />
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Validation Trend Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <LineChartIcon className="h-5 w-5" />
+                Validation Trends
+              </CardTitle>
+              <CardDescription>
+                Pass rate and validation counts over time
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {runsLoading ? (
+                <Skeleton className="h-64 w-full" />
+              ) : !validationRuns?.runs.length ? (
+                <div className="flex h-64 items-center justify-center text-muted-foreground">
+                  <div className="text-center">
+                    <LineChartIcon className="h-8 w-8 mx-auto mb-2" />
+                    <p>No validation history</p>
+                    <p className="text-sm">Run validations to see trends</p>
+                  </div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart
+                    data={validationRuns.runs
+                      .slice()
+                      .reverse()
+                      .map((run) => ({
+                        date: new Date(run.started_at).toLocaleDateString(),
+                        runId: run.run_id,
+                        passRate:
+                          run.total_passed + run.total_failed > 0
+                            ? Math.round(
+                                (run.total_passed /
+                                  (run.total_passed + run.total_failed)) *
+                                  100
+                              )
+                            : 0,
+                        passed: run.total_passed,
+                        failed: run.total_failed,
+                        warnings: run.total_warnings,
+                      }))}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                    <XAxis
+                      dataKey="date"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      yAxisId="left"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
+                      domain={[0, 100]}
+                      tickFormatter={(value) => `${value}%`}
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '6px',
+                      }}
+                      labelStyle={{ fontWeight: 'bold' }}
+                    />
+                    <Legend />
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="passRate"
+                      name="Pass Rate %"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      dot={{ r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="passed"
+                      name="Passed"
+                      stroke="#22c55e"
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                    />
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="failed"
+                      name="Failed"
+                      stroke="#ef4444"
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
               )}
             </CardContent>
           </Card>

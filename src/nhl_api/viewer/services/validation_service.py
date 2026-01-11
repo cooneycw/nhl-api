@@ -20,10 +20,13 @@ from nhl_api.viewer.schemas.validation import (
     DiscrepancySummary,
     QualityScore,
     QualityScoresResponse,
+    SeasonSummary,
+    SourceAccuracy,
     ValidationResult,
     ValidationRule,
     ValidationRulesResponse,
     ValidationRunDetail,
+    ValidationRunResponse,
     ValidationRunsResponse,
     ValidationRunSummary,
 )
@@ -510,4 +513,288 @@ class ValidationService:
             created_at=row["created_at"],
             resolved_at=row["resolved_at"],
             result_id=row["result_id"],
+        )
+
+    # =========================================================================
+    # Trigger Validation Run
+    # =========================================================================
+
+    async def trigger_validation_run(
+        self,
+        db: DatabaseService,
+        season_id: int | None = None,
+        game_id: int | None = None,
+        validator_types: list[str] | None = None,
+    ) -> ValidationRunResponse:
+        """Trigger a validation run for a season or game.
+
+        Args:
+            db: Database service
+            season_id: Season to validate (e.g., 20242025)
+            game_id: Specific game to validate (optional)
+            validator_types: Types of validators to run
+
+        Returns:
+            ValidationRunResponse with run_id and status
+        """
+        from nhl_api.viewer.services.auto_validation_service import (
+            AutoValidationService,
+        )
+
+        if validator_types is None:
+            validator_types = ["json_cross_source"]
+
+        # Determine season from game if not provided
+        if season_id is None and game_id is not None:
+            season_id = await db.fetchval(
+                "SELECT season_id FROM games WHERE game_id = $1",
+                game_id,
+            )
+
+        if season_id is None:
+            raise ValueError("Either season_id or game_id must be provided")
+
+        # Create validation run record
+        run_id: int = await db.fetchval(
+            """
+            INSERT INTO validation_runs (season_id, status, metadata)
+            VALUES ($1, 'running', $2)
+            RETURNING run_id
+            """,
+            season_id,
+            {
+                "game_id": game_id,
+                "validator_types": validator_types,
+                "triggered_from": "api",
+            },
+        )
+
+        # Get auto-validation service and run validation
+        service = AutoValidationService.get_instance()
+
+        if game_id is not None:
+            # Validate single game synchronously
+            try:
+                from nhl_api.viewer.services.auto_validation_service import (
+                    ValidationQueueItem,
+                )
+
+                item = ValidationQueueItem(
+                    game_id=game_id,
+                    season_id=season_id,
+                    validator_types=validator_types,
+                )
+                await service._run_validation(db, item)
+
+                return ValidationRunResponse(
+                    run_id=run_id,
+                    status="completed",
+                    message=f"Validation completed for game {game_id}",
+                )
+            except Exception as e:
+                # Mark run as failed
+                await db.execute(
+                    """
+                    UPDATE validation_runs
+                    SET status = 'failed',
+                        completed_at = CURRENT_TIMESTAMP,
+                        metadata = metadata || $2
+                    WHERE run_id = $1
+                    """,
+                    run_id,
+                    {"error": str(e)},
+                )
+                return ValidationRunResponse(
+                    run_id=run_id,
+                    status="failed",
+                    message=f"Validation failed: {e}",
+                )
+        else:
+            # Queue batch validation for season
+            games = await service.get_games_pending_validation(db, season_id, limit=500)
+
+            if not games:
+                await db.execute(
+                    """
+                    UPDATE validation_runs
+                    SET status = 'completed',
+                        completed_at = CURRENT_TIMESTAMP,
+                        rules_checked = 0,
+                        total_passed = 0,
+                        total_failed = 0
+                    WHERE run_id = $1
+                    """,
+                    run_id,
+                )
+                return ValidationRunResponse(
+                    run_id=run_id,
+                    status="completed",
+                    message="No games pending validation",
+                )
+
+            # Queue games for async validation
+            for gid in games:
+                await service.queue_validation(db, gid, season_id, validator_types)
+
+            return ValidationRunResponse(
+                run_id=run_id,
+                status="running",
+                message=f"Queued validation for {len(games)} games",
+            )
+
+    # =========================================================================
+    # Season Summary
+    # =========================================================================
+
+    async def get_season_summary(
+        self,
+        db: DatabaseService,
+        season_id: int,
+    ) -> SeasonSummary:
+        """Get comprehensive validation summary for a season.
+
+        Args:
+            db: Database service
+            season_id: Season ID (e.g., 20242025)
+
+        Returns:
+            SeasonSummary with metrics and source accuracy
+        """
+        # Get season display format
+        year_start = season_id // 10000
+        year_end = season_id % 10000
+        season_display = f"{year_start}-{str(year_end)[-2:]}"
+
+        # Get total games in season
+        total_games: int = (
+            await db.fetchval(
+                """
+            SELECT COUNT(DISTINCT game_id)
+            FROM games
+            WHERE season_id = $1 AND game_state IN ('OFF', 'FINAL')
+            """,
+                season_id,
+            )
+            or 0
+        )
+
+        if total_games == 0:
+            raise ValueError(f"No completed games found for season {season_id}")
+
+        # Get validation results summary
+        validation_stats = await db.fetchrow(
+            """
+            SELECT
+                COUNT(DISTINCT vr.game_id) as games_validated,
+                COUNT(DISTINCT CASE WHEN vr.passed = false THEN vr.game_id END) as failed_games,
+                SUM(CASE WHEN vr.passed = true THEN 1 ELSE 0 END) as total_passed,
+                SUM(CASE WHEN vr.passed = false THEN 1 ELSE 0 END) as total_failed
+            FROM validation_results vr
+            JOIN validation_runs run ON vr.run_id = run.run_id
+            WHERE run.season_id = $1
+            """,
+            season_id,
+        )
+
+        games_validated = (
+            validation_stats["games_validated"] or 0 if validation_stats else 0
+        )
+        failed_games = validation_stats["failed_games"] or 0 if validation_stats else 0
+        reconciled_games = games_validated - failed_games
+
+        # Calculate reconciliation percentage
+        reconciliation_pct = (
+            (reconciled_games / games_validated * 100) if games_validated > 0 else 0.0
+        )
+
+        # Get total goals in season
+        total_goals: int = (
+            await db.fetchval(
+                """
+            SELECT COUNT(*)
+            FROM game_events
+            WHERE season_id = $1 AND event_type = 'GOAL'
+            """,
+                season_id,
+            )
+            or 0
+        )
+
+        # Get source accuracy - accuracy per data source
+        source_accuracy_rows = await db.fetch(
+            """
+            WITH source_checks AS (
+                SELECT
+                    CASE
+                        WHEN r.name LIKE '%boxscore%' THEN 'Boxscore'
+                        WHEN r.name LIKE '%pbp%' THEN 'Play-by-Play'
+                        WHEN r.name LIKE '%shift%' THEN 'Shift Chart'
+                        WHEN r.name LIKE '%html%' THEN 'HTML Reports'
+                        ELSE 'Other'
+                    END as source,
+                    COUNT(DISTINCT vr.game_id) as total_games,
+                    SUM(CASE WHEN vr.passed THEN 1 ELSE 0 END) as passed,
+                    SUM(CASE WHEN NOT vr.passed THEN 1 ELSE 0 END) as failed
+                FROM validation_results vr
+                JOIN validation_rules r ON vr.rule_id = r.rule_id
+                JOIN validation_runs run ON vr.run_id = run.run_id
+                WHERE run.season_id = $1
+                GROUP BY 1
+            )
+            SELECT
+                source,
+                total_games,
+                CASE WHEN (passed + failed) > 0
+                    THEN ROUND(passed::numeric / (passed + failed) * 100, 1)
+                    ELSE 0
+                END as accuracy_percentage,
+                failed as total_discrepancies
+            FROM source_checks
+            ORDER BY total_games DESC
+            """,
+            season_id,
+        )
+
+        source_accuracy = [
+            SourceAccuracy(
+                source=row["source"],
+                total_games=row["total_games"],
+                accuracy_percentage=float(row["accuracy_percentage"]),
+                total_discrepancies=row["total_discrepancies"],
+            )
+            for row in source_accuracy_rows
+        ]
+
+        # Get common discrepancy types
+        discrepancy_counts = await db.fetch(
+            """
+            SELECT
+                r.name as rule_name,
+                COUNT(*) as count
+            FROM validation_results vr
+            JOIN validation_rules r ON vr.rule_id = r.rule_id
+            JOIN validation_runs run ON vr.run_id = run.run_id
+            WHERE run.season_id = $1 AND NOT vr.passed
+            GROUP BY r.name
+            ORDER BY count DESC
+            LIMIT 10
+            """,
+            season_id,
+        )
+
+        common_discrepancies = {
+            row["rule_name"]: row["count"] for row in discrepancy_counts
+        }
+
+        return SeasonSummary(
+            season_id=season_id,
+            season_display=season_display,
+            total_games=total_games,
+            reconciled_games=reconciled_games,
+            failed_games=failed_games,
+            reconciliation_percentage=round(reconciliation_pct, 1),
+            total_goals=total_goals,
+            games_with_discrepancies=failed_games,
+            source_accuracy=source_accuracy,
+            common_discrepancies=common_discrepancies,
         )
