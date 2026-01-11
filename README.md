@@ -58,8 +58,15 @@ FastAPI backend with React frontend for exploring downloaded data:
 # Clone and setup environment
 git clone git@github.com:cooneycw/nhl-api.git
 cd nhl-api
-conda env create -f environment.yml
-conda activate nhl-api
+
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create environment and install dependencies
+uv sync --all-extras
+
+# Activate environment (optional - can use 'uv run' instead)
+source .venv/bin/activate
 
 # Configure database credentials
 cp .env.example .env
@@ -70,6 +77,7 @@ pre-commit install
 
 # Run tests
 pytest
+# Or without activation: uv run pytest
 ```
 
 ## Running the Data Viewer

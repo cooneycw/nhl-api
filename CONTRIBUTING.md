@@ -7,7 +7,7 @@ Thank you for your interest in contributing to the NHL API project. This guide c
 ### Prerequisites
 
 - Python 3.11 or higher
-- Conda (for environment management)
+- [uv](https://docs.astral.sh/uv/) (for environment and dependency management)
 - Git
 
 ### Installation
@@ -18,20 +18,24 @@ Thank you for your interest in contributing to the NHL API project. This guide c
    cd nhl-api
    ```
 
-2. **Create the conda environment:**
+2. **Install uv (if needed):**
    ```bash
-   conda env create -f environment.yml
-   conda activate nhl-api
+   curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
 
-3. **Verify installation:**
+3. **Create the environment and install dependencies:**
    ```bash
-   python -c "import nhl_api; print(nhl_api.__version__)"
+   uv sync --all-extras
    ```
 
-4. **Install pre-commit hooks:**
+4. **Verify installation:**
    ```bash
-   pre-commit install
+   uv run python -c "import nhl_api; print('nhl_api imported successfully')"
+   ```
+
+5. **Install pre-commit hooks:**
+   ```bash
+   uv run pre-commit install
    ```
    This installs hooks for ruff (linting/formatting), mypy (type checking), and pytest (unit tests).
 

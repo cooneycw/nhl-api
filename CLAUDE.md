@@ -146,7 +146,7 @@ Then browse to:
 ## Key Conventions
 
 - Python 3.11+
-- Use conda environments
+- Use uv for environment management (`uv sync --all-extras`)
 - Git worktrees for parallel issue development
 - Pre-commit hooks block commits if unit tests fail
 - 80% test coverage threshold

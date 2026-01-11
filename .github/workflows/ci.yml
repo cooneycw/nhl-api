@@ -20,19 +20,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.11"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
 
       - name: Install ruff
-        run: pip install ruff==0.14.10
+        run: uv tool install ruff@0.14.10
 
       - name: Run ruff linter
-        run: ruff check .
+        run: uv tool run ruff check .
 
       - name: Run ruff formatter
-        run: ruff format --check .
+        run: uv tool run ruff format --check .
 
   type-check:
     name: Type Check
@@ -40,16 +43,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.11"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
 
       - name: Install dependencies
-        run: pip install -e .[lint,test,viewer,scraping]
+        run: uv sync --frozen --extra lint --extra test --extra viewer --extra scraping
 
       - name: Run mypy
-        run: mypy .
+        run: uv run mypy .
 
   test:
     name: Test (Python ${{ matrix.python-version }})
@@ -62,16 +68,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: pip install -e .[test,viewer,scraping]
+        run: uv sync --frozen --extra test --extra viewer --extra scraping
 
       - name: Run tests with coverage
-        run: pytest -m "not integration and not live"
+        run: uv run pytest -m "not integration and not live"
 
       - name: Upload coverage report
         if: matrix.python-version == '3.11'
