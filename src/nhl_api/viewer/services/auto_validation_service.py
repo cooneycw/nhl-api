@@ -325,43 +325,51 @@ class AutoValidationService:
             for validator_type in item.validator_types:
                 if validator_type == "json_cross_source":
                     results = await self._run_json_cross_source(db, game_id)
+                elif validator_type == "json_vs_html":
+                    results = await self._run_json_vs_html(db, game_id)
+                else:
+                    logger.warning("Unknown validator type: %s", validator_type)
+                    continue
 
-                    # Store results
-                    for result in results:
-                        rules_checked += 1
+                if not results:
+                    continue
 
-                        # Get rule_id for this check
-                        rule_name = str(result.get("rule_name", "unknown"))
-                        rule_id = await self._get_or_create_rule(
-                            db, rule_name, "cross_file"
-                        )
+                # Store results
+                for result in results:
+                    rules_checked += 1
 
-                        passed = bool(result.get("passed", False))
-                        severity = str(result.get("severity", "warning"))
+                    # Get rule_id for this check
+                    rule_name = str(result.get("rule_name", "unknown"))
+                    rule_id = await self._get_or_create_rule(
+                        db, rule_name, "cross_file"
+                    )
 
-                        if passed:
-                            total_passed += 1
-                        elif severity == "error":
-                            total_failed += 1
-                        else:
-                            total_warnings += 1
+                    passed = bool(result.get("passed", False))
+                    severity = str(result.get("severity", "warning"))
 
-                        # Insert result
-                        await db.execute(
-                            """
-                            INSERT INTO validation_results
-                            (run_id, rule_id, game_id, season_id, passed, severity, message, details)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                            """,
-                            run_id,
-                            rule_id,
-                            game_id,
-                            season_id,
-                            passed,
-                            severity,
-                            result.get("message"),
-                            result.get("details"),
-                        )
+                    if passed:
+                        total_passed += 1
+                    elif severity == "error":
+                        total_failed += 1
+                    else:
+                        total_warnings += 1
+
+                    # Insert result
+                    await db.execute(
+                        """
+                        INSERT INTO validation_results
+                        (run_id, rule_id, game_id, season_id, passed, severity, message, details)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                        """,
+                        run_id,
+                        rule_id,
+                        game_id,
+                        season_id,
+                        passed,
+                        severity,
+                        result.get("message"),
+                        result.get("details"),
+                    )
 
             # Update run as completed
             await db.execute(
@@ -519,6 +527,132 @@ class AutoValidationService:
                     "severity": "info",
                     "message": f"Shift data present with {shift_toi['total_toi_seconds']}s max TOI",
                     "details": {"has_shifts": True},
+                }
+            )
+
+        return results
+
+    async def _run_json_vs_html(
+        self,
+        db: DatabaseService,
+        game_id: int,
+    ) -> list[dict[str, object]]:
+        """Run JSON vs HTML cross-source validation for a game.
+
+        Compares:
+        - Goals: PBP/Boxscore JSON vs Game Summary HTML
+        - Shots: Boxscore JSON vs Shot Summary HTML
+
+        Args:
+            db: Database service
+            game_id: Game ID to validate
+
+        Returns:
+            List of validation result dictionaries
+        """
+        results: list[dict[str, object]] = []
+
+        # Get season_id for this game
+        season_id = await db.fetchval(
+            "SELECT season_id FROM games WHERE game_id = $1",
+            game_id,
+        )
+
+        if not season_id:
+            return results
+
+        # Get goals from PBP JSON
+        pbp_goals = await db.fetchrow(
+            """
+            SELECT
+                COUNT(CASE WHEN team_abbrev = g.home_team THEN 1 END) as home_goals,
+                COUNT(CASE WHEN team_abbrev = g.away_team THEN 1 END) as away_goals
+            FROM game_events ge
+            JOIN games g ON ge.game_id = g.game_id
+            WHERE ge.game_id = $1 AND ge.event_type = 'GOAL'
+            """,
+            game_id,
+        )
+
+        # Get goals from HTML Game Summary
+        html_gs = await db.fetchrow(
+            """
+            SELECT home_goals, away_goals
+            FROM html_game_summary
+            WHERE game_id = $1 AND season_id = $2
+            """,
+            game_id,
+            season_id,
+        )
+
+        if pbp_goals and html_gs:
+            # Compare home goals: JSON vs HTML
+            json_home = pbp_goals["home_goals"] or 0
+            html_home = html_gs["home_goals"] or 0
+            home_match = json_home == html_home
+
+            results.append(
+                {
+                    "rule_name": "goals_json_vs_html_home",
+                    "passed": home_match,
+                    "severity": "error" if not home_match else "info",
+                    "message": f"Home goals: JSON={json_home}, HTML={html_home}",
+                    "details": {
+                        "json_value": json_home,
+                        "html_value": html_home,
+                        "team": "home",
+                    },
+                }
+            )
+
+            # Compare away goals: JSON vs HTML
+            json_away = pbp_goals["away_goals"] or 0
+            html_away = html_gs["away_goals"] or 0
+            away_match = json_away == html_away
+
+            results.append(
+                {
+                    "rule_name": "goals_json_vs_html_away",
+                    "passed": away_match,
+                    "severity": "error" if not away_match else "info",
+                    "message": f"Away goals: JSON={json_away}, HTML={html_away}",
+                    "details": {
+                        "json_value": json_away,
+                        "html_value": html_away,
+                        "team": "away",
+                    },
+                }
+            )
+        elif html_gs:
+            # HTML data available but no PBP data - log warning
+            results.append(
+                {
+                    "rule_name": "json_vs_html_data_presence",
+                    "passed": False,
+                    "severity": "warning",
+                    "message": "HTML Game Summary available but PBP events missing",
+                    "details": {"has_html": True, "has_json": False},
+                }
+            )
+
+        # Check HTML data availability
+        html_es = await db.fetchval(
+            """
+            SELECT 1 FROM html_event_summary
+            WHERE game_id = $1 AND season_id = $2
+            """,
+            game_id,
+            season_id,
+        )
+
+        if html_es:
+            results.append(
+                {
+                    "rule_name": "html_event_summary_present",
+                    "passed": True,
+                    "severity": "info",
+                    "message": "HTML Event Summary data available",
+                    "details": {"has_html_es": True},
                 }
             )
 

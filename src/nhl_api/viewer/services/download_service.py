@@ -1576,7 +1576,9 @@ class DownloadService:
             return
 
         # Only trigger for sources that are part of validation
-        validation_source_ids = {2, 3, 16}  # boxscore, pbp, shift_chart
+        # JSON sources: boxscore(2), pbp(3), shift_chart(16)
+        # HTML sources: html_gs(7), html_es(8), html_fs(10), html_ss(13), html_tv(14), html_th(15)
+        validation_source_ids = {2, 3, 16, 7, 8, 10, 13, 14, 15}
         if batch["source_id"] not in validation_source_ids:
             return
 
@@ -1601,8 +1603,16 @@ class DownloadService:
         # Ensure worker is running
         await auto_validation.start()
 
+        # Determine validator types based on source
+        # HTML sources (7, 8, 10, 13, 14, 15) trigger json_vs_html validation
+        html_source_ids = {7, 8, 10, 13, 14, 15}
+        if batch["source_id"] in html_source_ids:
+            validator_types = ["json_cross_source", "json_vs_html"]
+        else:
+            validator_types = ["json_cross_source"]
+
         # Queue each game for validation
         for game_id in games:
             await auto_validation.queue_validation(
-                db, game_id, season_id, validator_types=["json_cross_source"]
+                db, game_id, season_id, validator_types=validator_types
             )

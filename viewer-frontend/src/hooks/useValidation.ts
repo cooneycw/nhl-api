@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
 // =============================================================================
@@ -113,6 +113,38 @@ interface DiscrepanciesResponse {
   page: number
   page_size: number
   pages: number
+}
+
+interface ValidationRunRequest {
+  season_id?: number
+  game_id?: number
+  validator_types?: string[]
+}
+
+interface ValidationRunResponse {
+  run_id: number
+  status: string
+  message: string
+}
+
+interface SourceAccuracy {
+  source: string
+  total_games: number
+  accuracy_percentage: number
+  total_discrepancies: number
+}
+
+interface SeasonSummary {
+  season_id: number
+  season_display: string
+  total_games: number
+  reconciled_games: number
+  failed_games: number
+  reconciliation_percentage: number
+  total_goals: number
+  games_with_discrepancies: number
+  source_accuracy: SourceAccuracy[]
+  common_discrepancies: Record<string, number>
 }
 
 // =============================================================================
@@ -260,6 +292,46 @@ export function useDiscrepancy(discrepancyId: number) {
   })
 }
 
+/**
+ * Trigger a validation run for a season or game.
+ * Invalidates relevant queries on success.
+ */
+export function useTriggerValidation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (request: ValidationRunRequest) =>
+      api.post<ValidationRunResponse>('/validation/run', request),
+    onSuccess: (_data, variables) => {
+      // Invalidate relevant queries to trigger refetch
+      if (variables.season_id) {
+        queryClient.invalidateQueries({
+          queryKey: ['validation', 'runs', variables.season_id],
+        })
+        queryClient.invalidateQueries({
+          queryKey: ['validation', 'summary', variables.season_id],
+        })
+        queryClient.invalidateQueries({
+          queryKey: ['validation', 'discrepancies', variables.season_id],
+        })
+      }
+    },
+  })
+}
+
+/**
+ * Fetch season validation summary.
+ */
+export function useSeasonSummary(seasonId: number) {
+  return useQuery({
+    queryKey: ['validation', 'summary', seasonId],
+    queryFn: () =>
+      api.get<SeasonSummary>(`/validation/summary/${seasonId}`),
+    staleTime: 30000,
+    enabled: !!seasonId,
+  })
+}
+
 // =============================================================================
 // Export Types
 // =============================================================================
@@ -267,6 +339,10 @@ export function useDiscrepancy(discrepancyId: number) {
 export type {
   ValidationRule,
   ValidationRulesResponse,
+  ValidationRunRequest,
+  ValidationRunResponse,
+  SeasonSummary,
+  SourceAccuracy,
   ValidationResult,
   ValidationRunSummary,
   ValidationRunDetail,
