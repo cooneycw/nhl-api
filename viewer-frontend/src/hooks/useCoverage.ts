@@ -4,13 +4,14 @@ import { api, type CoverageResponse } from '@/lib/api'
 interface UseCoverageOptions {
   seasonIds?: number[]
   includeAll?: boolean
+  gameType?: number | null  // 1=Preseason, 2=Regular, 3=Playoffs, 4=All-Star
 }
 
 export function useCoverage(options: UseCoverageOptions = {}) {
-  const { seasonIds, includeAll = false } = options
+  const { seasonIds, includeAll = false, gameType } = options
 
   return useQuery({
-    queryKey: ['coverage', seasonIds, includeAll],
+    queryKey: ['coverage', seasonIds, includeAll, gameType],
     queryFn: async () => {
       const params: Record<string, string> = {}
 
@@ -21,6 +22,10 @@ export function useCoverage(options: UseCoverageOptions = {}) {
 
       if (includeAll) {
         params.include_all = 'true'
+      }
+
+      if (gameType !== undefined && gameType !== null) {
+        params.game_type = gameType.toString()
       }
 
       return api.get<CoverageResponse>('/coverage/summary', params)
