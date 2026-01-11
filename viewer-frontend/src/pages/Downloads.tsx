@@ -110,8 +110,16 @@ export function Downloads() {
   const { data: syncStatus, isLoading: syncLoading } = useSyncStatus()
   const { data: priorSeasons, isLoading: seasonsLoading } = usePriorSeasons()
 
-  // Coverage data for inventory view
-  const { data: coverage, isLoading: coverageLoading } = useCoverage({ includeAll: false })
+  // Data Inventory filters state
+  const [inventorySeason, setInventorySeason] = useState<number | null>(null)
+  const [inventoryGameType, setInventoryGameType] = useState<number | null>(null)
+
+  // Coverage data for inventory view (with optional filters)
+  const { data: coverage, isLoading: coverageLoading } = useCoverage({
+    includeAll: false,
+    seasonIds: inventorySeason ? [inventorySeason] : undefined,
+    gameType: inventoryGameType,
+  })
   const quickPreseason = useQuickPreseason()
   const quickRegular = useQuickRegular()
   const quickPlayoffs = useQuickPlayoffs()
@@ -459,6 +467,54 @@ export function Downloads() {
               </Link>
             </Button>
           </div>
+          {/* Filters row */}
+          <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t">
+            {/* Season dropdown */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Season:</span>
+              <Select
+                value={inventorySeason?.toString() || 'current'}
+                onValueChange={(val) => setInventorySeason(val === 'current' ? null : parseInt(val))}
+              >
+                <SelectTrigger className="w-32 h-8">
+                  <SelectValue placeholder="Current" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="current">Current</SelectItem>
+                  {options?.seasons.map((s) => (
+                    <SelectItem key={s.season_id} value={s.season_id.toString()}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {/* Game type filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Type:</span>
+              <div className="flex gap-1">
+                <Button
+                  variant={inventoryGameType === null ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-8 px-3"
+                  onClick={() => setInventoryGameType(null)}
+                >
+                  All
+                </Button>
+                {GAME_TYPES.map((gt) => (
+                  <Button
+                    key={gt.id}
+                    variant={inventoryGameType === gt.id ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-8 px-3"
+                    onClick={() => setInventoryGameType(gt.id)}
+                  >
+                    {gt.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {coverageLoading ? (
@@ -473,13 +529,18 @@ export function Downloads() {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Show current season (first one when includeAll=false) */}
+              {/* Show selected/current season */}
               {coverage.seasons.slice(0, 1).map((season) => (
                 <div key={season.season_id}>
                   <div className="flex items-center gap-2 mb-3">
                     <span className="font-medium text-sm">{season.season_label}</span>
-                    {season.is_current && (
+                    {season.is_current && !inventorySeason && (
                       <Badge variant="secondary" className="text-xs">Current</Badge>
+                    )}
+                    {inventoryGameType && (
+                      <Badge variant="outline" className="text-xs">
+                        {GAME_TYPES.find(gt => gt.id === inventoryGameType)?.label}
+                      </Badge>
                     )}
                     <span className="text-xs text-muted-foreground ml-auto">
                       {season.game_logs_total.toLocaleString()} game logs
