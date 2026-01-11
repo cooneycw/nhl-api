@@ -7,8 +7,6 @@ Issue: #261 - Wave 3: Matchup Analysis
 
 from __future__ import annotations
 
-import pytest
-
 from nhl_api.models.matchups import (
     GameMatchupSummary,
     MatchupResult,

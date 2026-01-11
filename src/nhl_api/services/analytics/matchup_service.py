@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from itertools import combinations
 from typing import TYPE_CHECKING, Any
 
 from nhl_api.models.matchups import (
@@ -40,9 +39,10 @@ from nhl_api.models.matchups import (
     MatchupResult,
     MatchupType,
     PlayerMatchup,
+    Zone,
     ZoneMatchup,
 )
-from nhl_api.services.analytics.zone_detection import Zone, ZoneDetector
+from nhl_api.services.analytics.zone_detection import ZoneDetector
 
 if TYPE_CHECKING:
     from nhl_api.services.db.connection import DatabaseService
@@ -229,7 +229,7 @@ class MatchupService:
         query = f"""
             SELECT COUNT(*) as toi_seconds
             FROM second_snapshots
-            WHERE {' AND '.join(conditions)}
+            WHERE {" AND ".join(conditions)}
         """
 
         result = await self.db.fetchval(query, *params)
@@ -383,7 +383,9 @@ class MatchupService:
             param_idx += 1
 
         if filters.situation_codes:
-            placeholders = ", ".join(f"${param_idx + i}" for i in range(len(filters.situation_codes)))
+            placeholders = ", ".join(
+                f"${param_idx + i}" for i in range(len(filters.situation_codes))
+            )
             conditions.append(f"situation_code IN ({placeholders})")
             params.extend(filters.situation_codes)
             param_idx += len(filters.situation_codes)
@@ -399,7 +401,7 @@ class MatchupService:
                 COUNT(*) as toi_seconds,
                 COUNT(DISTINCT game_id) as game_count
             FROM second_snapshots
-            WHERE {' AND '.join(conditions)}
+            WHERE {" AND ".join(conditions)}
                 AND ${param_idx} = ANY(home_skater_ids)
             GROUP BY teammate_id, situation_code
             HAVING unnest(home_skater_ids) != ${param_idx}
@@ -413,7 +415,7 @@ class MatchupService:
                 COUNT(*) as toi_seconds,
                 COUNT(DISTINCT game_id) as game_count
             FROM second_snapshots
-            WHERE {' AND '.join(conditions)}
+            WHERE {" AND ".join(conditions)}
                 AND ${param_idx} = ANY(away_skater_ids)
             GROUP BY teammate_id, situation_code
             HAVING unnest(away_skater_ids) != ${param_idx}
@@ -496,7 +498,9 @@ class MatchupService:
             param_idx += 1
 
         if filters.situation_codes:
-            placeholders = ", ".join(f"${param_idx + i}" for i in range(len(filters.situation_codes)))
+            placeholders = ", ".join(
+                f"${param_idx + i}" for i in range(len(filters.situation_codes))
+            )
             conditions.append(f"situation_code IN ({placeholders})")
             params.extend(filters.situation_codes)
             param_idx += len(filters.situation_codes)
@@ -512,7 +516,7 @@ class MatchupService:
                 COUNT(*) as toi_seconds,
                 COUNT(DISTINCT game_id) as game_count
             FROM second_snapshots
-            WHERE {' AND '.join(conditions)}
+            WHERE {" AND ".join(conditions)}
                 AND ${param_idx} = ANY(home_skater_ids)
             GROUP BY opponent_id, situation_code
         """
@@ -525,7 +529,7 @@ class MatchupService:
                 COUNT(*) as toi_seconds,
                 COUNT(DISTINCT game_id) as game_count
             FROM second_snapshots
-            WHERE {' AND '.join(conditions)}
+            WHERE {" AND ".join(conditions)}
                 AND ${param_idx} = ANY(away_skater_ids)
             GROUP BY opponent_id, situation_code
         """
@@ -635,7 +639,7 @@ class MatchupService:
                         (1200 - CAST(SPLIT_PART(e.time_in_period, ':', 1) AS INTEGER) * 60
                          - CAST(SPLIT_PART(e.time_in_period, ':', 2) AS INTEGER))
                     )
-                WHERE {' AND '.join(conditions)}
+                WHERE {" AND ".join(conditions)}
                     AND ${player_param} = ANY(s.home_skater_ids)
                 GROUP BY other_player_id
 
@@ -652,7 +656,7 @@ class MatchupService:
                         (1200 - CAST(SPLIT_PART(e.time_in_period, ':', 1) AS INTEGER) * 60
                          - CAST(SPLIT_PART(e.time_in_period, ':', 2) AS INTEGER))
                     )
-                WHERE {' AND '.join(conditions)}
+                WHERE {" AND ".join(conditions)}
                     AND ${player_param} = ANY(s.away_skater_ids)
                 GROUP BY other_player_id
             """
@@ -670,7 +674,7 @@ class MatchupService:
                         (1200 - CAST(SPLIT_PART(e.time_in_period, ':', 1) AS INTEGER) * 60
                          - CAST(SPLIT_PART(e.time_in_period, ':', 2) AS INTEGER))
                     )
-                WHERE {' AND '.join(conditions)}
+                WHERE {" AND ".join(conditions)}
                     AND ${player_param} = ANY(s.home_skater_ids)
                 GROUP BY other_player_id
                 HAVING unnest(s.home_skater_ids) != ${player_param}
@@ -688,7 +692,7 @@ class MatchupService:
                         (1200 - CAST(SPLIT_PART(e.time_in_period, ':', 1) AS INTEGER) * 60
                          - CAST(SPLIT_PART(e.time_in_period, ':', 2) AS INTEGER))
                     )
-                WHERE {' AND '.join(conditions)}
+                WHERE {" AND ".join(conditions)}
                     AND ${player_param} = ANY(s.away_skater_ids)
                 GROUP BY other_player_id
                 HAVING unnest(s.away_skater_ids) != ${player_param}
@@ -799,7 +803,7 @@ class MatchupService:
         query = f"""
             SELECT COUNT(DISTINCT game_id)
             FROM second_snapshots
-            WHERE {' AND '.join(conditions)}
+            WHERE {" AND ".join(conditions)}
                 AND (${param_idx} = ANY(home_skater_ids)
                      OR ${param_idx} = ANY(away_skater_ids))
         """
