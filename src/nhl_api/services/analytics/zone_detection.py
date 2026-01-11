@@ -44,14 +44,14 @@ class ZoneResult:
 
     Attributes:
         zone: The detected zone.
-        x_coord: Original x coordinate.
+        x_coord: Original x coordinate, or None if unknown.
         y_coord: Original y coordinate.
         period: Game period.
         is_home_perspective: True if zone is from home team perspective.
     """
 
     zone: Zone
-    x_coord: float
+    x_coord: float | None
     y_coord: float
     period: int
     is_home_perspective: bool
@@ -83,7 +83,7 @@ class ZoneDetector:
 
     def get_zone(
         self,
-        x_coord: float,
+        x_coord: float | None,
         y_coord: float | None = None,
         *,
         period: int = 1,
@@ -92,7 +92,7 @@ class ZoneDetector:
         """Determine the ice zone from coordinates.
 
         Args:
-            x_coord: X coordinate on ice (-100 to 100).
+            x_coord: X coordinate on ice (-100 to 100), or None if unknown.
             y_coord: Y coordinate on ice (not used but available).
             period: Game period (1, 2, 3, etc.).
             is_home_team: True if analyzing from home team perspective.
@@ -134,7 +134,7 @@ class ZoneDetector:
 
     def get_zone_result(
         self,
-        x_coord: float,
+        x_coord: float | None,
         y_coord: float | None = None,
         *,
         period: int = 1,
@@ -143,7 +143,7 @@ class ZoneDetector:
         """Get detailed zone result with context.
 
         Args:
-            x_coord: X coordinate on ice.
+            x_coord: X coordinate on ice, or None if unknown.
             y_coord: Y coordinate on ice.
             period: Game period.
             is_home_team: True if analyzing from home team perspective.
