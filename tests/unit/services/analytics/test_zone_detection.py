@@ -8,9 +8,8 @@ Issue: #261 - Wave 3: Matchup Analysis (T022)
 
 from __future__ import annotations
 
-import pytest
-
-from nhl_api.services.analytics.zone_detection import Zone, ZoneDetector, ZoneResult
+from nhl_api.models.matchups import Zone
+from nhl_api.services.analytics.zone_detection import ZoneDetector, ZoneResult
 
 
 class TestZoneDetector:
@@ -107,9 +106,7 @@ class TestZoneDetectorResult:
     def test_get_zone_result_includes_context(self) -> None:
         """Zone result should include full context."""
         detector = ZoneDetector()
-        result = detector.get_zone_result(
-            75.0, 10.0, period=2, is_home_team=True
-        )
+        result = detector.get_zone_result(75.0, 10.0, period=2, is_home_team=True)
 
         assert isinstance(result, ZoneResult)
         assert result.zone == Zone.DEFENSIVE

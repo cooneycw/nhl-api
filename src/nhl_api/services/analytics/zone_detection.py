@@ -25,19 +25,12 @@ Issue: #261 - Wave 3: Matchup Analysis (T022)
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
 from typing import TYPE_CHECKING
+
+from nhl_api.models.matchups import Zone
 
 if TYPE_CHECKING:
     pass
-
-
-class Zone(str, Enum):
-    """Ice zone classification."""
-
-    OFFENSIVE = "O"
-    DEFENSIVE = "D"
-    NEUTRAL = "N"
 
 
 # NHL rink zone boundaries (blue lines)
@@ -117,7 +110,9 @@ class ZoneDetector:
         home_attacks_right = period % 2 == 1  # Odd periods attack right
 
         # For away team, flip the direction
-        team_attacks_right = home_attacks_right if is_home_team else not home_attacks_right
+        team_attacks_right = (
+            home_attacks_right if is_home_team else not home_attacks_right
+        )
 
         # Neutral zone check first
         if abs(x_coord) <= self.blue_line:

@@ -16,12 +16,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from tests.integration.analytics.conftest import make_record, make_records
-from nhl_api.models.matchups import MatchupType, PlayerMatchup
 from nhl_api.services.analytics.matchup_service import (
     MatchupQueryFilters,
     MatchupService,
 )
+from tests.integration.analytics.conftest import make_record, make_records
 
 if TYPE_CHECKING:
     pass
@@ -66,9 +65,7 @@ class TestMatchupServiceQueries:
     """Tests for matchup query functionality."""
 
     @pytest.mark.asyncio
-    async def test_get_player_matchups_teammates(
-        self, sample_game_info: dict
-    ) -> None:
+    async def test_get_player_matchups_teammates(self, sample_game_info: dict) -> None:
         """Should return teammate matchups."""
         db = AsyncMock()
 
@@ -80,14 +77,16 @@ class TestMatchupServiceQueries:
             call_count[0] += 1
             # First two calls are teammate queries (home and away)
             if call_count[0] <= 2:
-                return make_records([
-                    {
-                        "teammate_id": 8477934,
-                        "situation_code": "5v5",
-                        "toi_seconds": 800,
-                        "game_count": 10,
-                    },
-                ])
+                return make_records(
+                    [
+                        {
+                            "teammate_id": 8477934,
+                            "situation_code": "5v5",
+                            "toi_seconds": 800,
+                            "game_count": 10,
+                        },
+                    ]
+                )
             # Next two are opponent queries
             return []
 
@@ -105,9 +104,7 @@ class TestMatchupServiceQueries:
         assert result.total_games == 10
 
     @pytest.mark.asyncio
-    async def test_get_player_matchups_opponents(
-        self, sample_game_info: dict
-    ) -> None:
+    async def test_get_player_matchups_opponents(self, sample_game_info: dict) -> None:
         """Should return opponent matchups."""
         db = AsyncMock()
 
@@ -119,14 +116,16 @@ class TestMatchupServiceQueries:
             if call_count[0] <= 2:
                 return []
             # Next two are opponent queries
-            return make_records([
-                {
-                    "opponent_id": 8477846,
-                    "situation_code": "5v5",
-                    "toi_seconds": 500,
-                    "game_count": 5,
-                },
-            ])
+            return make_records(
+                [
+                    {
+                        "opponent_id": 8477846,
+                        "situation_code": "5v5",
+                        "toi_seconds": 500,
+                        "game_count": 5,
+                    },
+                ]
+            )
 
         db.fetch = mock_fetch
         db.fetchval = AsyncMock(return_value=5)
@@ -145,9 +144,7 @@ class TestMatchupServiceGameSummary:
     """Tests for game matchup summary."""
 
     @pytest.mark.asyncio
-    async def test_get_game_matchup_summary(
-        self, sample_game_info: dict
-    ) -> None:
+    async def test_get_game_matchup_summary(self, sample_game_info: dict) -> None:
         """Should return game matchup summary."""
         db = AsyncMock()
 
@@ -159,18 +156,20 @@ class TestMatchupServiceGameSummary:
         db.fetchrow = mock_fetchrow
 
         db.fetch = AsyncMock(
-            return_value=make_records([
-                {
-                    "home_player": 8478402,
-                    "away_player": 8477846,
-                    "total_toi": 1200,
-                },
-                {
-                    "home_player": 8477934,
-                    "away_player": 8477846,
-                    "total_toi": 1000,
-                },
-            ])
+            return_value=make_records(
+                [
+                    {
+                        "home_player": 8478402,
+                        "away_player": 8477846,
+                        "total_toi": 1200,
+                    },
+                    {
+                        "home_player": 8477934,
+                        "away_player": 8477846,
+                        "total_toi": 1000,
+                    },
+                ]
+            )
         )
 
         service = MatchupService(db)
@@ -198,20 +197,20 @@ class TestMatchupServiceDefensiveZone:
     """Tests for defensive zone matchup filtering."""
 
     @pytest.mark.asyncio
-    async def test_get_defensive_zone_matchups(
-        self, sample_game_info: dict
-    ) -> None:
+    async def test_get_defensive_zone_matchups(self, sample_game_info: dict) -> None:
         """Should filter to defensive zone matchups."""
         db = AsyncMock()
 
         db.fetch = AsyncMock(
-            return_value=make_records([
-                {
-                    "other_player_id": 8477846,
-                    "event_count": 5,
-                    "toi_seconds": 120,
-                },
-            ])
+            return_value=make_records(
+                [
+                    {
+                        "other_player_id": 8477846,
+                        "event_count": 5,
+                        "toi_seconds": 120,
+                    },
+                ]
+            )
         )
 
         service = MatchupService(db)
@@ -238,14 +237,16 @@ class TestMatchupServiceAggregation:
             call_count[0] += 1
             # Calls 1-2: opponent queries (home + away)
             if call_count[0] <= 2:
-                return make_records([
-                    {
-                        "opponent_id": 8477846,
-                        "situation_code": "5v5",
-                        "toi_seconds": 800,
-                        "game_count": 5,
-                    },
-                ])
+                return make_records(
+                    [
+                        {
+                            "opponent_id": 8477846,
+                            "situation_code": "5v5",
+                            "toi_seconds": 800,
+                            "game_count": 5,
+                        },
+                    ]
+                )
             # Calls 3-4: teammate queries (home + away)
             return []
 
