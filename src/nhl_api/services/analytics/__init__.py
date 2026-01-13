@@ -17,11 +17,25 @@ Example usage:
         matchup_service = MatchupService(db)
         matchups = await matchup_service.get_player_matchups(8478402)
 
+        # Aggregation (Wave 5)
+        agg_service = AggregationService(db)
+        game_stats = await agg_service.aggregate_game(game_id=2024020500)
+
 Issue: #259 - Second-by-Second Analytics
 Issue: #261 - Wave 3: Matchup Analysis
+Issue: #263 - Wave 5: Aggregation Functions
 """
 
 from nhl_api.models.matchups import Zone
+from nhl_api.services.analytics.aggregation import (
+    AggregationFilters,
+    AggregationService,
+    GameAggregation,
+    LineCombinationStats,
+    PeriodAggregation,
+    SeasonAggregation,
+    ShiftAggregation,
+)
 from nhl_api.services.analytics.event_attributor import (
     AttributionResult,
     EventAttribution,
@@ -70,4 +84,12 @@ __all__ = [
     "ZoneDetector",
     "Zone",
     "ZoneResult",
+    # Aggregation (Wave 5)
+    "AggregationService",
+    "AggregationFilters",
+    "ShiftAggregation",
+    "PeriodAggregation",
+    "GameAggregation",
+    "SeasonAggregation",
+    "LineCombinationStats",
 ]
